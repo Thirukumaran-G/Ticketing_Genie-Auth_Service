@@ -14,7 +14,12 @@ from src.api.rest.routes.admin_router import router as admin_router
 from src.api.rest.routes.health import router as health_router
 from src.data.clients.postgres_client import get_db_session, engine
 from src.data.models.postgres.models import Base
-from src.scripts.role_tier_seeder import seed
+from src.scripts.role_tier_seeder import seed as tier_seeder
+from src.scripts.company_seeder import seed as company_seeder
+from src.scripts.product_seeder import seed as product_seeder
+from src.scripts.admin_seeder import seed as admin_seeder
+from src.scripts.user_seeder import seed as user_seeder
+from src.scripts.subscription_seeder import seed as subscription_seeder
 from src.observability.logging.logger import configure_logging, get_logger
 
 logger = get_logger(__name__)
@@ -32,7 +37,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Seed roles and tiers 
     async for session in get_db_session():
-        await seed()  
+        await tier_seeder()
+        await company_seeder()
+        await product_seeder()
+        await admin_seeder()
+        await user_seeder()
+        await subscription_seeder()
         logger.info("roles_seeded")
         logger.info("tiers_seeded")
         break

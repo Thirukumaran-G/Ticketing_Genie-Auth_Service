@@ -4,10 +4,9 @@ import uuid
 from typing import List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
 
-from src.core.exceptions.base import ConflictException, NotFoundException, ValidationException
-from src.data.models.postgres.models import Company, CompanyProductSubscription, Product, Tier, User, Role
+from src.core.exceptions.base import ConflictException, NotFoundException
+from src.data.models.postgres.models import Company, CompanyProductSubscription, Product
 from src.data.repositories.admin_repository import AdminRepository
 from src.data.repositories.user_repository import UserRepository
 from src.observability.logging.logger import get_logger
@@ -43,8 +42,9 @@ class AdminService:
         if payload.domain:
             existing = await self._admin_repo.get_company_by_domain(payload.domain)
             if existing:
-                raise ConflictException(f"Company with domain '{payload.domain}' already exists.")
-
+                raise ConflictException(
+                    f"Company with domain '{payload.domain}' already exists."
+                )
         company = Company(
             name=payload.name,
             domain=payload.domain,
@@ -56,35 +56,32 @@ class AdminService:
         logger.info("company_created", company_id=str(created.id))
         return CompanyResponse.model_validate(created)
 
+    async def get_company(self, company_id: uuid.UUID) -> CompanyResponse:
+        company = await self._admin_repo.get_company_by_id(company_id)
+        if not company:
+            raise NotFoundException("Company not found.")
+        return CompanyResponse.model_validate(company)
+
+    async def list_companies(self) -> List[CompanyResponse]:
+        companies = await self._admin_repo.list_companies()
+        return [CompanyResponse.model_validate(c) for c in companies]
+
     async def update_company(
         self, company_id: uuid.UUID, payload: CompanyUpdateRequest
     ) -> CompanyResponse:
         company = await self._admin_repo.get_company_by_id(company_id)
         if not company:
             raise NotFoundException("Company not found.")
-
         if payload.domain and payload.domain != company.domain:
             existing = await self._admin_repo.get_company_by_domain(payload.domain)
             if existing:
                 raise ConflictException(f"Domain '{payload.domain}' already taken.")
-
         changes = payload.model_dump(exclude_none=True)
         if changes:
             await self._admin_repo.update_company(company_id, changes)
             await self._session.commit()
-
         updated = await self._admin_repo.get_company_by_id(company_id)
         return CompanyResponse.model_validate(updated)
-
-    async def list_companies(self) -> List[CompanyResponse]:
-        companies = await self._admin_repo.list_companies()
-        return [CompanyResponse.model_validate(c) for c in companies]
-
-    async def get_company(self, company_id: uuid.UUID) -> CompanyResponse:
-        company = await self._admin_repo.get_company_by_id(company_id)
-        if not company:
-            raise NotFoundException("Company not found.")
-        return CompanyResponse.model_validate(company)
 
     # ── Product ───────────────────────────────────────────────────────────────
 
@@ -93,8 +90,9 @@ class AdminService:
     ) -> ProductResponse:
         existing = await self._admin_repo.get_product_by_code(payload.code)
         if existing:
-            raise ConflictException(f"Product with code '{payload.code}' already exists.")
-
+            raise ConflictException(
+                f"Product with code '{payload.code}' already exists."
+            )
         product = Product(
             name=payload.name,
             code=payload.code,
@@ -106,26 +104,24 @@ class AdminService:
         logger.info("product_created", product_id=str(created.id))
         return ProductResponse.model_validate(created)
 
+    async def list_products(self) -> List[ProductResponse]:
+        products = await self._admin_repo.list_products()
+        return [ProductResponse.model_validate(p) for p in products]
+
     async def update_product(
         self, product_id: uuid.UUID, payload: ProductUpdateRequest
     ) -> ProductResponse:
         product = await self._admin_repo.get_product_by_id(product_id)
         if not product:
             raise NotFoundException("Product not found.")
-
         changes = payload.model_dump(exclude_none=True)
         if changes:
             await self._admin_repo.update_product(product_id, changes)
             await self._session.commit()
-
         updated = await self._admin_repo.get_product_by_id(product_id)
         return ProductResponse.model_validate(updated)
 
-    async def list_products(self) -> List[ProductResponse]:
-        products = await self._admin_repo.list_products()
-        return [ProductResponse.model_validate(p) for p in products]
-
-    # ── CompanyProductSubscription ────────────────────────────────────────────
+    # ── Subscription ──────────────────────────────────────────────────────────
 
     async def assign_subscription(
         self,
@@ -136,22 +132,20 @@ class AdminService:
         company = await self._admin_repo.get_company_by_id(company_id)
         if not company:
             raise NotFoundException("Company not found.")
-
         product = await self._admin_repo.get_product_by_id(payload.product_id)
         if not product:
             raise NotFoundException("Product not found.")
-
         tier = await self._admin_repo.get_tier_by_id(payload.tier_id)
         if not tier:
             raise NotFoundException("Tier not found.")
-
-        existing = await self._admin_repo.get_active_subscription(company_id, payload.product_id)
+        existing = await self._admin_repo.get_active_subscription(
+            company_id, payload.product_id
+        )
         if existing:
             raise ConflictException(
                 "An active subscription already exists for this company/product. "
-                "Deactivate it first before assigning a new one."
+                "Deactivate it first."
             )
-
         sub = CompanyProductSubscription(
             company_id=company_id,
             product_id=payload.product_id,
@@ -161,38 +155,43 @@ class AdminService:
         )
         created = await self._admin_repo.create_subscription(sub)
         await self._session.commit()
-        logger.info("subscription_assigned", company_id=str(company_id), product_id=str(payload.product_id))
+        logger.info(
+            "subscription_assigned",
+            company_id=str(company_id),
+            product_id=str(payload.product_id),
+        )
         return await self._build_sub_response(created)
 
     async def update_subscription(
         self,
-        company_id:      uuid.UUID,
+        company_id: uuid.UUID,
         subscription_id: uuid.UUID,
-        payload:         SubscriptionUpdateRequest,
-        actor_id:        str,
+        payload: SubscriptionUpdateRequest,
+        actor_id: str,
     ) -> SubscriptionResponse:
         sub = await self._admin_repo.get_subscription_by_id(subscription_id)
         if not sub or sub.company_id != company_id:
             raise NotFoundException("Subscription not found.")
-
         if payload.tier_id:
             tier = await self._admin_repo.get_tier_by_id(payload.tier_id)
             if not tier:
                 raise NotFoundException("Tier not found.")
-
         changes = payload.model_dump(exclude_none=True)
         if changes:
             await self._admin_repo.update_subscription(subscription_id, changes)
             await self._session.commit()
-
         updated = await self._admin_repo.get_subscription_by_id(subscription_id)
         return await self._build_sub_response(updated)
 
-    async def list_subscriptions(self, company_id: uuid.UUID) -> List[SubscriptionResponse]:
+    async def list_subscriptions(
+        self, company_id: uuid.UUID
+    ) -> List[SubscriptionResponse]:
         subs = await self._admin_repo.list_subscriptions(company_id)
         return [await self._build_sub_response(s) for s in subs]
 
-    async def _build_sub_response(self, sub: CompanyProductSubscription) -> SubscriptionResponse:
+    async def _build_sub_response(
+        self, sub: CompanyProductSubscription
+    ) -> SubscriptionResponse:
         product = await self._admin_repo.get_product_by_id(sub.product_id)
         tier    = await self._admin_repo.get_tier_by_id(sub.tier_id)
         return SubscriptionResponse(

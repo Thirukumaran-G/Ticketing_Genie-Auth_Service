@@ -1,8 +1,3 @@
-"""
-Seeds support agents and team leads, sends welcome email to each.
-Run via:
-    uv run python -m src.scripts.staff_seeder
-"""
 from __future__ import annotations
 
 import asyncio

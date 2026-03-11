@@ -4,13 +4,13 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ── Company ───────────────────────────────────────────────────────────────────
 
 class CompanyCreateRequest(BaseModel):
-    name:   str           = Field(min_length=1, max_length=255)
+    name:   str           = Field(..., min_length=1, max_length=255)
     domain: Optional[str] = Field(default=None, max_length=255)
 
 
@@ -21,20 +21,20 @@ class CompanyUpdateRequest(BaseModel):
 
 
 class CompanyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id:         uuid.UUID
     name:       str
     domain:     Optional[str]
     is_active:  bool
     created_at: datetime
 
-    model_config = {"from_attributes": True}
-
 
 # ── Product ───────────────────────────────────────────────────────────────────
 
 class ProductCreateRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
-    code: str = Field(min_length=1, max_length=100)
+    name: str = Field(..., min_length=1, max_length=255)
+    code: str = Field(..., min_length=1, max_length=100)
 
 
 class ProductUpdateRequest(BaseModel):
@@ -43,16 +43,16 @@ class ProductUpdateRequest(BaseModel):
 
 
 class ProductResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id:         uuid.UUID
     name:       str
     code:       str
     is_active:  bool
     created_at: datetime
 
-    model_config = {"from_attributes": True}
 
-
-# ── CompanyProductSubscription ────────────────────────────────────────────────
+# ── Subscription ──────────────────────────────────────────────────────────────
 
 class SubscriptionAssignRequest(BaseModel):
     product_id: uuid.UUID
@@ -65,6 +65,8 @@ class SubscriptionUpdateRequest(BaseModel):
 
 
 class SubscriptionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id:           uuid.UUID
     company_id:   uuid.UUID
     product_id:   uuid.UUID
@@ -75,23 +77,23 @@ class SubscriptionResponse(BaseModel):
     is_active:    bool
     assigned_at:  datetime
 
-    model_config = {"from_attributes": True}
-
 
 # ── Tier ──────────────────────────────────────────────────────────────────────
 
 class TierResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id:          uuid.UUID
     name:        str
     description: Optional[str]
     is_active:   bool
 
-    model_config = {"from_attributes": True}
 
-
-# ── Admin user view ───────────────────────────────────────────────────────────
+# ── Admin User View ───────────────────────────────────────────────────────────
 
 class AdminUserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id:         uuid.UUID
     email:      str
     full_name:  Optional[str]
@@ -100,5 +102,3 @@ class AdminUserResponse(BaseModel):
     is_active:  bool
     last_login: Optional[datetime]
     created_at: datetime
-
-    model_config = {"from_attributes": True}

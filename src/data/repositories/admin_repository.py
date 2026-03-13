@@ -7,7 +7,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.data.models.postgres.models import (
-    Company, Product, Tier, CompanyProductSubscription, User, Role
+    Company, Product, Role, Tier, CompanyProductSubscription, User
 )
 
 
@@ -42,6 +42,13 @@ class AdminRepository:
         )
         return list(result.scalars().all())
 
+    async def delete_company(self, company_id: uuid.UUID) -> None:
+        from sqlalchemy import delete
+        await self._session.execute(
+            delete(Company).where(Company.id == company_id)
+        )
+        await self._session.flush()
+
     async def update_company(self, company_id: uuid.UUID, changes: dict) -> None:
         await self._session.execute(
             update(Company).where(Company.id == company_id).values(**changes)
@@ -55,6 +62,13 @@ class AdminRepository:
         await self._session.flush()
         await self._session.refresh(product)
         return product
+
+    async def delete_product(self, product_id: uuid.UUID) -> None:
+        from sqlalchemy import delete
+        await self._session.execute(
+            delete(Product).where(Product.id == product_id)
+        )
+        await self._session.flush()
 
     async def get_product_by_id(self, product_id: uuid.UUID) -> Optional[Product]:
         result = await self._session.execute(
@@ -93,6 +107,15 @@ class AdminRepository:
             select(Tier).where(Tier.id == tier_id)
         )
         return result.scalar_one_or_none()
+
+    # ── Roles ─────────────────────────────────────────────────────────────────
+
+    async def list_roles(self) -> List[Role]:
+        """Return all active roles — used to populate the create-user dropdown."""
+        result = await self._session.execute(
+            select(Role).where(Role.is_active == True).order_by(Role.name)
+        )
+        return list(result.scalars().all())
 
     # ── Subscription ──────────────────────────────────────────────────────────
 
@@ -143,6 +166,15 @@ class AdminRepository:
             update(CompanyProductSubscription)
             .where(CompanyProductSubscription.id == subscription_id)
             .values(**changes)
+        )
+        await self._session.flush()
+
+    async def delete_subscription(self, subscription_id: uuid.UUID) -> None:
+        from sqlalchemy import delete
+        await self._session.execute(
+            delete(CompanyProductSubscription).where(
+                CompanyProductSubscription.id == subscription_id
+            )
         )
         await self._session.flush()
 

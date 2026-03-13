@@ -66,7 +66,7 @@ async def seed() -> None:
 
             role      = role_map[entry["role"]]
             # temp_pass = generate_secure_password(length=12)
-            temp_pass = "Vasanthi1981@"
+            temp_pass = "gtkias96776@"
 
             user = User(
                 email=entry["email"],

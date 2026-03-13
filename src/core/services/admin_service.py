@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import secrets
+import string
 import uuid
 from typing import List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions.base import ConflictException, NotFoundException
-from src.data.models.postgres.models import Company, CompanyProductSubscription, Product
+from src.utils.password_utils import hash_password
+from src.core.services.email_service import EmailService
+from src.data.models.postgres.models import Company, CompanyProductSubscription, Product, User
 from src.data.repositories.admin_repository import AdminRepository
 from src.data.repositories.user_repository import UserRepository
 from src.observability.logging.logger import get_logger
@@ -18,13 +22,35 @@ from src.schemas.admin_schemas import (
     ProductCreateRequest,
     ProductResponse,
     ProductUpdateRequest,
+    RoleResponse,
     SubscriptionAssignRequest,
     SubscriptionResponse,
     SubscriptionUpdateRequest,
     TierResponse,
+    UserCreateRequest,
 )
 
 logger = get_logger(__name__)
+
+_EMAIL_SVC = EmailService()
+
+
+def _generate_temp_password(length: int = 12) -> str:
+    """
+    Generate a cryptographically secure temporary password.
+    Format: letters + digits + a handful of safe symbols.
+    Always contains at least one upper, one lower, one digit, one symbol.
+    """
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    while True:
+        pwd = "".join(secrets.choice(alphabet) for _ in range(length))
+        if (
+            any(c.isupper() for c in pwd)
+            and any(c.islower() for c in pwd)
+            and any(c.isdigit() for c in pwd)
+            and any(c in "!@#$%^&*" for c in pwd)
+        ):
+            return pwd
 
 
 class AdminService:
@@ -55,6 +81,14 @@ class AdminService:
         await self._session.commit()
         logger.info("company_created", company_id=str(created.id))
         return CompanyResponse.model_validate(created)
+
+    async def delete_company(self, company_id: uuid.UUID) -> None:
+        company = await self._admin_repo.get_company_by_id(company_id)
+        if not company:
+            raise NotFoundException("Company not found.")
+        await self._admin_repo.delete_company(company_id)
+        await self._session.commit()
+        logger.info("company_deleted", company_id=str(company_id))
 
     async def get_company(self, company_id: uuid.UUID) -> CompanyResponse:
         company = await self._admin_repo.get_company_by_id(company_id)
@@ -103,6 +137,14 @@ class AdminService:
         await self._session.commit()
         logger.info("product_created", product_id=str(created.id))
         return ProductResponse.model_validate(created)
+
+    async def delete_product(self, product_id: uuid.UUID) -> None:
+        product = await self._admin_repo.get_product_by_id(product_id)
+        if not product:
+            raise NotFoundException("Product not found.")
+        await self._admin_repo.delete_product(product_id)
+        await self._session.commit()
+        logger.info("product_deleted", product_id=str(product_id))
 
     async def list_products(self) -> List[ProductResponse]:
         products = await self._admin_repo.list_products()
@@ -162,6 +204,16 @@ class AdminService:
         )
         return await self._build_sub_response(created)
 
+    async def delete_subscription(
+        self, company_id: uuid.UUID, subscription_id: uuid.UUID
+    ) -> None:
+        sub = await self._admin_repo.get_subscription_by_id(subscription_id)
+        if not sub or sub.company_id != company_id:
+            raise NotFoundException("Subscription not found.")
+        await self._admin_repo.delete_subscription(subscription_id)
+        await self._session.commit()
+        logger.info("subscription_deleted", subscription_id=str(subscription_id))
+
     async def update_subscription(
         self,
         company_id: uuid.UUID,
@@ -212,6 +264,12 @@ class AdminService:
         tiers = await self._admin_repo.list_tiers()
         return [TierResponse.model_validate(t) for t in tiers]
 
+    # ── Roles ─────────────────────────────────────────────────────────────────
+
+    async def list_roles(self) -> List[RoleResponse]:
+        roles = await self._admin_repo.list_roles()
+        return [RoleResponse.model_validate(r) for r in roles]
+
     # ── Users ─────────────────────────────────────────────────────────────────
 
     async def list_users(self) -> List[AdminUserResponse]:
@@ -230,6 +288,58 @@ class AdminService:
                 created_at=user.created_at,
             ))
         return result
+
+    async def create_user(
+        self, payload: UserCreateRequest, actor_id: str
+    ) -> AdminUserResponse:
+        # 1. Check email uniqueness
+        existing = await self._user_repo.get_by_email(payload.email)
+        if existing:
+            raise ConflictException(f"User with email '{payload.email}' already exists.")
+
+        # 2. Resolve role by name
+        role = await self._user_repo.get_role_by_name(payload.role)
+        if not role:
+            raise NotFoundException(f"Role '{payload.role}' not found.")
+
+        # 3. Generate temp password — never logged, never returned to admin
+        temp_password = _generate_temp_password()
+        hashed        = hash_password(temp_password)
+
+        # 4. Build and persist user
+        user = User(
+            email=payload.email,
+            full_name=payload.full_name,
+            hashed_password=hashed,
+            role_id=role.id,
+            preferred_contact=payload.preferred_contact or "email",
+            is_active=True,
+        )
+        created = await self._user_repo.create(user)
+        await self._session.commit()
+        logger.info("user_created_by_admin", user_id=str(created.id), role=payload.role)
+
+        # 5. Fire welcome email — plaintext password goes only to inbox
+        try:
+            await _EMAIL_SVC.send_welcome_credentials(
+                to_email=created.email,
+                full_name=created.full_name,
+                role=payload.role,
+                temp_password=temp_password,
+            )
+        except Exception as exc:   # email failure must never roll back the user creation
+            logger.error("welcome_email_failed", user_id=str(created.id), error=str(exc))
+
+        return AdminUserResponse(
+            id=created.id,
+            email=created.email,
+            full_name=created.full_name,
+            role=payload.role,
+            company_id=created.company_id,
+            is_active=created.is_active,
+            last_login=created.last_login,
+            created_at=created.created_at,
+        )
 
     async def deactivate_user(self, user_id: uuid.UUID) -> None:
         user = await self._user_repo.get_active_by_id(str(user_id))

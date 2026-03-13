@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, EmailStr
 
 
 # ── Company ───────────────────────────────────────────────────────────────────
@@ -102,3 +103,15 @@ class AdminUserResponse(BaseModel):
     is_active:  bool
     last_login: Optional[datetime]
     created_at: datetime
+
+class UserCreateRequest(BaseModel):
+    email:             EmailStr
+    full_name:         Optional[str] = None
+    role:              str                    # role name e.g. "agent", "team_lead"
+    preferred_contact: Optional[str] = "email"
+
+class RoleResponse(BaseModel):
+    id:   uuid.UUID
+    name: str
+ 
+    model_config = {"from_attributes": True}

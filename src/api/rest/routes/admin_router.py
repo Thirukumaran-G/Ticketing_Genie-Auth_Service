@@ -17,10 +17,12 @@ from src.schemas.admin_schemas import (
     ProductCreateRequest,
     ProductResponse,
     ProductUpdateRequest,
+    RoleResponse,           # ← new
     SubscriptionAssignRequest,
     SubscriptionResponse,
     SubscriptionUpdateRequest,
     TierResponse,
+    UserCreateRequest,      # ← new
 )
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -85,6 +87,20 @@ async def update_company(
     return await service.update_company(company_id, payload)
 
 
+@router.delete(
+    "/companies/{company_id}",
+    status_code=204,
+    summary="Hard delete a company",
+)
+async def delete_company(
+    company_id: uuid.UUID,
+    actor:      CurrentActor = Depends(require_roles("admin")),
+    service:    AdminService = Depends(_svc),
+) -> Response:
+    await service.delete_company(company_id)
+    return Response(status_code=204)
+
+
 # ── Products ──────────────────────────────────────────────────────────────────
 
 @router.post(
@@ -124,6 +140,20 @@ async def update_product(
     service:    AdminService = Depends(_svc),
 ) -> ProductResponse:
     return await service.update_product(product_id, payload)
+
+
+@router.delete(
+    "/products/{product_id}",
+    status_code=204,
+    summary="Hard delete a product",
+)
+async def delete_product(
+    product_id: uuid.UUID,
+    actor:      CurrentActor = Depends(require_roles("admin")),
+    service:    AdminService = Depends(_svc),
+) -> Response:
+    await service.delete_product(product_id)
+    return Response(status_code=204)
 
 
 # ── Subscriptions ─────────────────────────────────────────────────────────────
@@ -173,6 +203,21 @@ async def update_subscription(
     )
 
 
+@router.delete(
+    "/companies/{company_id}/subscriptions/{subscription_id}",
+    status_code=204,
+    summary="Hard delete a subscription",
+)
+async def delete_subscription(
+    company_id:      uuid.UUID,
+    subscription_id: uuid.UUID,
+    actor:           CurrentActor = Depends(require_roles("admin")),
+    service:         AdminService = Depends(_svc),
+) -> Response:
+    await service.delete_subscription(company_id, subscription_id)
+    return Response(status_code=204)
+
+
 # ── Tiers ─────────────────────────────────────────────────────────────────────
 
 @router.get(
@@ -187,6 +232,20 @@ async def list_tiers(
     return await service.list_tiers()
 
 
+# ── Roles ─────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/roles",
+    response_model=List[RoleResponse],
+    summary="List available roles",
+)
+async def list_roles(
+    actor:   CurrentActor = Depends(require_roles("admin")),
+    service: AdminService = Depends(_svc),
+) -> List[RoleResponse]:
+    return await service.list_roles()
+
+
 # ── Users ─────────────────────────────────────────────────────────────────────
 
 @router.get(
@@ -199,6 +258,20 @@ async def list_users(
     service: AdminService = Depends(_svc),
 ) -> List[AdminUserResponse]:
     return await service.list_users()
+
+
+@router.post(
+    "/users",
+    response_model=AdminUserResponse,
+    status_code=201,
+    summary="Create a new user and send welcome email with temp credentials",
+)
+async def create_user(
+    payload: UserCreateRequest,
+    actor:   CurrentActor = Depends(require_roles("admin")),
+    service: AdminService = Depends(_svc),
+) -> AdminUserResponse:
+    return await service.create_user(payload, actor.actor_id)
 
 
 @router.patch(

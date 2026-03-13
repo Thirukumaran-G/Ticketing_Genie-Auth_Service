@@ -1,3 +1,4 @@
+# auth service model
 from __future__ import annotations
 
 import uuid
@@ -5,7 +6,7 @@ from datetime import datetime
 from typing import ClassVar, Optional
 
 import uuid6
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, func, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -60,6 +61,8 @@ class Product(Base):
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     created_at: Mapped[datetime]      = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime]      = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
 
 
 class CompanyProductSubscription(Base):

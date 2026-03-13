@@ -37,12 +37,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Seed roles and tiers 
     async for session in get_db_session():
-        await tier_seeder()
-        await company_seeder()
-        await product_seeder()
-        await admin_seeder()
-        await user_seeder()
-        await subscription_seeder()
+        # await tier_seeder()
+        # await company_seeder()
+        # await product_seeder()
+        # await admin_seeder()
+        # await user_seeder()
+        # await subscription_seeder()
         logger.info("roles_seeded")
         logger.info("tiers_seeded")
         break

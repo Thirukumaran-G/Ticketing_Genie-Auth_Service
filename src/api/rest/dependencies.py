@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.core.exceptions.base import AuthenticationException, TokenExpiredException
@@ -22,16 +22,27 @@ class CurrentActor:
 
 
 async def get_current_actor(
+    request:     Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
 ) -> CurrentActor:
-    if not credentials or not credentials.credentials:
+    # 1. Try Authorization header first
+    # 2. Fall back to access_token cookie
+    token: Optional[str] = None
+
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    else:
+        token = request.cookies.get("access_token")
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing authorization token.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
     try:
-        payload = decode_token(credentials.credentials)
+        payload = decode_token(token)
     except TokenExpiredException:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -71,3 +82,7 @@ def require_roles(*roles: str):
             )
         return actor
     return _guard
+
+
+# ── keep old name working if anything imports it ──────────────────────────────
+require_role = require_roles

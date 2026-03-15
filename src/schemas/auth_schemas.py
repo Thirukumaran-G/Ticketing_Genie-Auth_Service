@@ -36,7 +36,7 @@ class RegisterResponse(BaseModel):
     email:      str
     full_name:  Optional[str]
     role:       str
-    company_id: uuid.UUID        # always set — resolved from email domain
+    company_id: uuid.UUID
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -54,21 +54,23 @@ class LoginRequest(BaseModel):
 class ProductTierInfo(BaseModel):
     tier_id:   str
     tier_name: str
-    code:      str   # product code e.g. "PRD-B"
+    code:      str
 
 
 class TokenPair(BaseModel):
     access_token:  str
     refresh_token: str
-    expires_in:    int   # seconds
+    expires_in:    int
 
 
+# Optional — backend reads from cookie if empty/missing
 class RefreshTokenRequest(BaseModel):
-    refresh_token: str
+    refresh_token: str = ""
 
 
+# Optional — backend reads from cookie if empty/missing
 class LogoutRequest(BaseModel):
-    refresh_token: str
+    refresh_token: str = ""
 
 
 class TokenValidationResponse(BaseModel):
@@ -78,7 +80,6 @@ class TokenValidationResponse(BaseModel):
     scopes:        list[str]
     email:         Optional[str]                         = None
     company_id:    Optional[str]                         = None
-    # keyed by product_id str — only present for customer role
     product_tiers: Optional[Dict[str, ProductTierInfo]] = None
 
 
@@ -89,9 +90,8 @@ class MeResponse(BaseModel):
     email:             str
     full_name:         Optional[str]
     role:              str
-    preferred_contact: Optional[str]                     = None
-    company_id:        Optional[uuid.UUID]               = None
-    # keyed by product_id str — only present for customer role
+    preferred_contact: Optional[str]                        = None
+    company_id:        Optional[uuid.UUID]                  = None
     product_tiers:     Optional[Dict[str, ProductTierInfo]] = None
     is_active:         bool
 
@@ -131,7 +131,7 @@ class ResetPasswordRequest(BaseModel):
 class InternalUserCreateRequest(BaseModel):
     email:     EmailStr
     full_name: str = Field(min_length=1, max_length=255)
-    role:      str = Field(min_length=1, max_length=20)   # agent | team_lead | admin
+    role:      str = Field(min_length=1, max_length=20)
 
 
 class InternalUserCreateResponse(BaseModel):
@@ -157,3 +157,27 @@ class UserEmailResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+class ProductListResponse(BaseModel):
+    products: list[dict]   # [{id, name, code, description}]
+
+
+class CompanyByDomainResponse(BaseModel):
+    company_id:   str
+    company_name: str
+    domain:       str
+
+
+class InternalCustomerCreateRequest(BaseModel):
+    email:             str
+    full_name:         str
+    company_id:        str
+    preferred_contact: str = "email"
+
+
+class InternalCustomerCreateResponse(BaseModel):
+    user_id:       str
+    email:         str
+    full_name:     str
+    temp_password: str
+    is_new:        bool

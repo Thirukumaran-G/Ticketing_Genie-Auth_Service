@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.rest.dependencies import CurrentActor, get_current_actor
 from src.core.services.auth_service import AuthService
 from src.core.services.email_service import EmailService
-from src.data.clients.postgres_client import get_db_session
+from src.data.clients.postgres_client import get_db_session, get_fresh_read_session  # ← updated
 from src.schemas.auth_schemas import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
@@ -29,7 +29,7 @@ from src.schemas.auth_schemas import (
     ProductListResponse,
     CompanyByDomainResponse,
     InternalCustomerCreateResponse,
-    InternalCustomerCreateRequest
+    InternalCustomerCreateRequest,
 )
 from pydantic import BaseModel as _BaseModel
 from src.data.models.postgres.models import Role, User
@@ -71,8 +71,12 @@ def _get_service(session: AsyncSession = Depends(get_db_session)) -> AuthService
 
 # ── Public routes ─────────────────────────────────────────────────────────────
 
-@router.post("/register", response_model=RegisterResponse, status_code=201,
-             summary="Customer self-registration — domain must match a registered company")
+@router.post(
+    "/register",
+    response_model=RegisterResponse,
+    status_code=201,
+    summary="Customer self-registration — domain must match a registered company",
+)
 async def register_user(
     payload: UserRegisterRequest,
     service: AuthService = Depends(_get_service),
@@ -87,7 +91,6 @@ async def login(
     service:  AuthService = Depends(_get_service),
 ) -> TokenPair:
     tokens = await service.login(payload)
-    # Only refresh token in cookie — access token goes to frontend memory via response body
     _set_refresh_cookie(response, tokens.refresh_token)
     return tokens
 
@@ -102,7 +105,6 @@ async def refresh_token(
     if not rt:
         raise HTTPException(status_code=401, detail="No refresh token provided.")
     tokens = await service.refresh_tokens(rt)
-    # Rotate refresh cookie, return new access token in body
     _set_refresh_cookie(response, tokens.refresh_token)
     return tokens
 
@@ -130,8 +132,11 @@ async def get_me(
     return await service.get_me(actor.actor_id)
 
 
-@router.post("/change-password", response_model=MessageResponse,
-             summary="Change own password — all roles")
+@router.post(
+    "/change-password",
+    response_model=MessageResponse,
+    summary="Change own password — all roles",
+)
 async def change_password(
     payload: ChangePasswordRequest,
     actor:   CurrentActor = Depends(get_current_actor),
@@ -140,8 +145,11 @@ async def change_password(
     return await service.change_password(actor.actor_id, payload)
 
 
-@router.post("/forgot-password", response_model=MessageResponse,
-             summary="Request password reset email")
+@router.post(
+    "/forgot-password",
+    response_model=MessageResponse,
+    summary="Request password reset email",
+)
 async def forgot_password(
     payload:          ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
@@ -161,8 +169,11 @@ async def forgot_password(
     )
 
 
-@router.post("/reset-password", response_model=MessageResponse,
-             summary="Reset password with token")
+@router.post(
+    "/reset-password",
+    response_model=MessageResponse,
+    summary="Reset password with token",
+)
 async def reset_password(
     payload: ResetPasswordRequest,
     service: AuthService = Depends(_get_service),
@@ -172,8 +183,12 @@ async def reset_password(
 
 # ── Internal (hidden from docs) ───────────────────────────────────────────────
 
-@router.post("/internal/users", response_model=InternalUserCreateResponse,
-             status_code=201, include_in_schema=False)
+@router.post(
+    "/internal/users",
+    response_model=InternalUserCreateResponse,
+    status_code=201,
+    include_in_schema=False,
+)
 async def internal_create_user(
     payload: InternalUserCreateRequest,
     service: AuthService = Depends(_get_service),
@@ -199,8 +214,11 @@ async def get_user_internal(
     }
 
 
-@router.post("/internal/validate", response_model=TokenValidationResponse,
-             include_in_schema=False)
+@router.post(
+    "/internal/validate",
+    response_model=TokenValidationResponse,
+    include_in_schema=False,
+)
 async def internal_validate_token(
     payload: RefreshTokenRequest,
     service: AuthService = Depends(_get_service),
@@ -208,8 +226,11 @@ async def internal_validate_token(
     return await service.validate_token(payload.refresh_token)
 
 
-@router.get("/internal/users/{user_id}/email", response_model=UserEmailResponse,
-            include_in_schema=False)
+@router.get(
+    "/internal/users/{user_id}/email",
+    response_model=UserEmailResponse,
+    include_in_schema=False,
+)
 async def internal_get_user_email(
     user_id: uuid.UUID,
     service: AuthService = Depends(_get_service),
@@ -283,13 +304,50 @@ async def internal_get_customer_tier(
     return TierLookupResponse(tier_id=str(tier.id), tier_name=tier.name)
 
 
+# ── by-domain — uses fresh_read_session so newly created companies are
+#    visible immediately without waiting for pool connection rotation.
+# ─────────────────────────────────────────────────────────────────────────────
+@router.get(
+    "/internal/companies/by-domain/{domain}",
+    response_model=CompanyByDomainResponse,
+    include_in_schema=False,
+)
+async def internal_get_company_by_domain(
+    domain:  str,
+    session: AsyncSession = Depends(get_fresh_read_session),  # ← key change
+) -> CompanyByDomainResponse:
+    from sqlalchemy import select, func
+    from src.data.models.postgres.models import Company
+
+    result = await session.execute(
+        select(Company).where(
+            func.lower(Company.domain) == domain.lower().strip(),
+            Company.is_active.is_(True),
+        )
+    )
+    company = result.scalar_one_or_none()
+    if not company:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No active company for domain '{domain}'",
+        )
+    return CompanyByDomainResponse(
+        company_id=str(company.id),
+        company_name=company.name,
+        domain=company.domain or domain,
+    )
+
+
+# ── active products — fresh_read_session so newly added products are
+#    visible to the email inbound worker on the very next poll tick.
+# ─────────────────────────────────────────────────────────────────────────────
 @router.get(
     "/internal/products/active",
     response_model=ProductListResponse,
     include_in_schema=False,
 )
 async def internal_list_active_products(
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_fresh_read_session),  # ← key change
 ) -> ProductListResponse:
     from sqlalchemy import select
     from src.data.models.postgres.models import Product
@@ -310,35 +368,6 @@ async def internal_list_active_products(
             }
             for p in rows
         ]
-    )
-
-
-@router.get(
-    "/internal/companies/by-domain/{domain}",
-    response_model=CompanyByDomainResponse,
-    include_in_schema=False,
-)
-async def internal_get_company_by_domain(
-    domain:  str,
-    session: AsyncSession = Depends(get_db_session),
-) -> CompanyByDomainResponse:
-    from sqlalchemy import select, func
-    from src.data.models.postgres.models import Company
-
-    result = await session.execute(
-        select(Company).where(
-            func.lower(Company.domain) == domain.lower().strip(),
-            Company.is_active.is_(True),
-        )
-    )
-    company = result.scalar_one_or_none()
-    if not company:
-        raise HTTPException(status_code=404, detail=f"No active company for domain '{domain}'")
-
-    return CompanyByDomainResponse(
-        company_id=str(company.id),
-        company_name=company.name,
-        domain=company.domain or domain,
     )
 
 

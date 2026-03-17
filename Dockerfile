@@ -6,10 +6,9 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
 
-# Install CPU only — skip torch/nvidia/cuda junk
 RUN uv sync --frozen --no-dev \
     --extra-index-url https://download.pytorch.org/whl/cpu
 
 COPY . .
 
-CMD ["uv", "run", "python", "-m", "src.main"]
+CMD ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

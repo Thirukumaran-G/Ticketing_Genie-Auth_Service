@@ -42,7 +42,7 @@ class EmailService:
         to_email:      str,
         full_name:     str | None,
         role:          str,
-        emp_password: str,
+        temp_password: str,
     ) -> None:
         """Send welcome email with temp credentials — never log temp_password."""
         display   = full_name or to_email.split("@")[0].replace(".", " ").title()
@@ -174,7 +174,7 @@ class EmailService:
             html_body=html,
         )
 
-    async def send_password_reset(
+    def send_password_reset(
         self,
         to_email:    str,
         full_name:   str | None,

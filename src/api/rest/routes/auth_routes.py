@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.rest.dependencies import CurrentActor, get_current_actor
 from src.core.services.auth_service import AuthService
-from src.core.services.email_service import EmailService
+from src.core.services.email_service_welcome import EmailService
 from src.data.clients.postgres_client import get_db_session, get_fresh_read_session  # ← updated
 from src.schemas.auth_schemas import (
     ChangePasswordRequest,
@@ -35,8 +35,8 @@ from pydantic import BaseModel as _BaseModel
 from src.data.models.postgres.models import Role, User
 
 # ── Cookie config ─────────────────────────────────────────────────────────────
-COOKIE_SECURE   = False   # flip to True in production (HTTPS)
-COOKIE_SAMESITE = "lax"
+COOKIE_SECURE   = True   # flip to True in production (HTTPS)
+COOKIE_SAMESITE = "none"
 REFRESH_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
 
 

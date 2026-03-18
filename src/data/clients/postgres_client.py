@@ -31,8 +31,8 @@ AsyncSessionFactory = async_sessionmaker(
 fresh_read_engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
-    pool_size=5,
-    max_overflow=10,
+    pool_size=2,
+    max_overflow=5,
     pool_pre_ping=True,
     execution_options={"isolation_level": "AUTOCOMMIT"},
     connect_args={"server_settings": {"search_path": "auth"}},

@@ -36,11 +36,6 @@ _EMAIL_SVC = EmailService()
 
 
 def _generate_temp_password(length: int = 12) -> str:
-    """
-    Generate a cryptographically secure temporary password.
-    Format: letters + digits + a handful of safe symbols.
-    Always contains at least one upper, one lower, one digit, one symbol.
-    """
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
     while True:
         pwd = "".join(secrets.choice(alphabet) for _ in range(length))
@@ -292,21 +287,17 @@ class AdminService:
     async def create_user(
         self, payload: UserCreateRequest, actor_id: str
     ) -> AdminUserResponse:
-        # 1. Check email uniqueness
         existing = await self._user_repo.get_by_email(payload.email)
         if existing:
             raise ConflictException(f"User with email '{payload.email}' already exists.")
 
-        # 2. Resolve role by name
         role = await self._user_repo.get_role_by_name(payload.role)
         if not role:
             raise NotFoundException(f"Role '{payload.role}' not found.")
 
-        # 3. Generate temp password — never logged, never returned to admin
         temp_password = _generate_temp_password()
         hashed        = hash_password(temp_password)
 
-        # 4. Build and persist user
         user = User(
             email=payload.email,
             full_name=payload.full_name,
@@ -319,7 +310,6 @@ class AdminService:
         await self._session.commit()
         logger.info("user_created_by_admin", user_id=str(created.id), role=payload.role)
 
-        # 5. Fire welcome email — plaintext password goes only to inbox
         try:
             await _EMAIL_SVC.send_welcome_credentials(
                 to_email=created.email,
@@ -327,7 +317,7 @@ class AdminService:
                 role=payload.role,
                 temp_password=temp_password,
             )
-        except Exception as exc:   # email failure must never roll back the user creation
+        except Exception as exc:
             logger.error("welcome_email_failed", user_id=str(created.id), error=str(exc))
 
         return AdminUserResponse(
@@ -341,10 +331,17 @@ class AdminService:
             created_at=created.created_at,
         )
 
-    async def deactivate_user(self, user_id: uuid.UUID) -> None:
-        user = await self._user_repo.get_active_by_id(str(user_id))
+    async def hard_delete_user(self, user_id: uuid.UUID) -> None:
+        """Permanently remove a user row from the database."""
+        from sqlalchemy import delete
+        from src.data.models.postgres.models import User
+
+        user = await self._session.get(User, user_id)
         if not user:
             raise NotFoundException("User not found.")
-        await self._user_repo.update_fields(user_id, {"is_active": False})
+
+        await self._session.execute(
+            delete(User).where(User.id == user_id)
+        )
         await self._session.commit()
-        logger.info("user_deactivated", user_id=str(user_id))
+        logger.info("user_hard_deleted", user_id=str(user_id))

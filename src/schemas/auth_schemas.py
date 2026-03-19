@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime
 from typing import Dict, Optional
@@ -7,13 +8,15 @@ from typing import Dict, Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
+# ── Shared password validator ─────────────────────────────────────────────────
+
 def _check_password_strength(v: str) -> str:
     if not any(c.isupper() for c in v):
         raise ValueError("Password must contain at least one uppercase letter.")
     if not any(c.islower() for c in v):
         raise ValueError("Password must contain at least one lowercase letter.")
     if not any(c.isdigit() for c in v):
-        raise ValueError("Password must contain at least one digit.")
+        raise ValueError("Password must contain at least one number.")
     return v
 
 
@@ -29,6 +32,18 @@ class UserRegisterRequest(BaseModel):
     @classmethod
     def password_strength(cls, v: str) -> str:
         return _check_password_strength(v)
+
+    @field_validator("ph_no")
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return None
+        digits = re.sub(r"\D", "", v)
+        if len(digits) != 10:
+            raise ValueError("Phone number must be exactly 10 digits.")
+        if digits[0] not in ("6", "7", "8", "9"):
+            raise ValueError("Phone number must start with 6, 7, 8, or 9.")
+        return digits
 
 
 class RegisterResponse(BaseModel):
@@ -63,12 +78,10 @@ class TokenPair(BaseModel):
     expires_in:    int
 
 
-# Optional — backend reads from cookie if empty/missing
 class RefreshTokenRequest(BaseModel):
     refresh_token: str = ""
 
 
-# Optional — backend reads from cookie if empty/missing
 class LogoutRequest(BaseModel):
     refresh_token: str = ""
 
@@ -158,8 +171,9 @@ class UserEmailResponse(BaseModel):
 class MessageResponse(BaseModel):
     message: str
 
+
 class ProductListResponse(BaseModel):
-    products: list[dict]   # [{id, name, code, description}]
+    products: list[dict]
 
 
 class CompanyByDomainResponse(BaseModel):
@@ -181,3 +195,6 @@ class InternalCustomerCreateResponse(BaseModel):
     full_name:     str
     temp_password: str
     is_new:        bool
+
+class PreferredContactUpdate(BaseModel):
+    preferred_contact: str

@@ -25,8 +25,6 @@ async def get_current_actor(
     request:     Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
 ) -> CurrentActor:
-    # 1. Try Authorization header first
-    # 2. Fall back to access_token cookie
     token: Optional[str] = None
 
     if credentials and credentials.credentials:

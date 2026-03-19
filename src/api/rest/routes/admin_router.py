@@ -17,12 +17,12 @@ from src.schemas.admin_schemas import (
     ProductCreateRequest,
     ProductResponse,
     ProductUpdateRequest,
-    RoleResponse,           # ← new
+    RoleResponse,
     SubscriptionAssignRequest,
     SubscriptionResponse,
     SubscriptionUpdateRequest,
     TierResponse,
-    UserCreateRequest,      # ← new
+    UserCreateRequest,
 )
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -274,15 +274,15 @@ async def create_user(
     return await service.create_user(payload, actor.actor_id)
 
 
-@router.patch(
-    "/users/{user_id}/deactivate",
+@router.delete(
+    "/users/{user_id}",
     status_code=204,
-    summary="Deactivate a user",
+    summary="Hard delete a user permanently",
 )
-async def deactivate_user(
+async def delete_user(
     user_id: uuid.UUID,
     actor:   CurrentActor = Depends(require_roles("admin")),
     service: AdminService = Depends(_svc),
 ) -> Response:
-    await service.deactivate_user(user_id)
+    await service.hard_delete_user(user_id)
     return Response(status_code=204)

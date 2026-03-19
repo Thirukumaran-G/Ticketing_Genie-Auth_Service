@@ -278,22 +278,6 @@ class AuthService:
         except Exception:
             logger.warning("logout_with_invalid_token")
 
-    # ── Validate token ────────────────────────────────────────────────────────
-
-    async def validate_token(self, access_token: str) -> TokenValidationResponse:
-        payload = decode_token(access_token)
-        if payload.get("type") != "access":
-            raise AuthenticationException("Access token required.")
-        return TokenValidationResponse(
-            valid=True,
-            actor_id=str(payload["sub"]),
-            role=payload["role"],
-            scopes=payload.get("scopes", []),
-            email=payload.get("email"),
-            company_id=payload.get("company_id"),
-            product_tiers=payload.get("product_tiers"),
-        )
-
     # ── Me ────────────────────────────────────────────────────────────────────
 
     async def get_me(self, user_id_str: str) -> MeResponse:
@@ -345,9 +329,10 @@ class AuthService:
         user = await self._user_repo.get_by_email(payload.email)
         if not user or not user.is_active or user.deleted_at is not None:
             return None
-
         await self._reset_repo.invalidate_existing(user.id)
+        await self._session.flush() 
 
+        # Step 2: generate a fresh token and insert it
         raw_token = secrets.token_urlsafe(48)
         reset = PasswordResetToken(
             user_id=user.id,

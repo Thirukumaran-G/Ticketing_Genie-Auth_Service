@@ -1,4 +1,3 @@
-"""Auth service routes — sets httpOnly cookies on login/refresh/logout."""
 from __future__ import annotations
 
 import uuid
@@ -9,17 +8,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.rest.dependencies import CurrentActor, get_current_actor
 from src.core.services.auth_service import AuthService
 from src.core.services.email_service_welcome import EmailService
-from src.data.clients.postgres_client import get_db_session, get_fresh_read_session  # ← updated
+from src.data.clients.postgres_client import get_db_session, get_fresh_read_session
 from src.schemas.auth_schemas import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
-    InternalUserCreateRequest,
+    InternalUserCreateRequest,  
     InternalUserCreateResponse,
     LoginRequest,
     LogoutRequest,
     MeResponse,
     MessageResponse,
     RefreshTokenRequest,
+    PreferredContactUpdate,
     RegisterResponse,
     ResetPasswordRequest,
     TokenPair,
@@ -35,9 +35,9 @@ from pydantic import BaseModel as _BaseModel
 from src.data.models.postgres.models import Role, User
 
 # ── Cookie config ─────────────────────────────────────────────────────────────
-COOKIE_SECURE   = True   # flip to True in production (HTTPS)
+COOKIE_SECURE   = True   
 COOKIE_SAMESITE = "none"
-REFRESH_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
+REFRESH_MAX_AGE = 60 * 60 * 24 * 7  
 
 
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
@@ -211,20 +211,8 @@ async def get_user_internal(
         "full_name": user.full_name,
         "role":      role.name if role else None,
         "is_active": user.is_active,
+        "preferred_contact":  user.preferred_contact,
     }
-
-
-@router.post(
-    "/internal/validate",
-    response_model=TokenValidationResponse,
-    include_in_schema=False,
-)
-async def internal_validate_token(
-    payload: RefreshTokenRequest,
-    service: AuthService = Depends(_get_service),
-) -> TokenValidationResponse:
-    return await service.validate_token(payload.refresh_token)
-
 
 @router.get(
     "/internal/users/{user_id}/email",
@@ -303,10 +291,7 @@ async def internal_get_customer_tier(
     _, tier = row
     return TierLookupResponse(tier_id=str(tier.id), tier_name=tier.name)
 
-
-# ── by-domain — uses fresh_read_session so newly created companies are
-#    visible immediately without waiting for pool connection rotation.
-# ─────────────────────────────────────────────────────────────────────────────
+# get company
 @router.get(
     "/internal/companies/by-domain/{domain}",
     response_model=CompanyByDomainResponse,
@@ -337,10 +322,7 @@ async def internal_get_company_by_domain(
         domain=company.domain or domain,
     )
 
-
-# ── active products — fresh_read_session so newly added products are
-#    visible to the email inbound worker on the very next poll tick.
-# ─────────────────────────────────────────────────────────────────────────────
+# products
 @router.get(
     "/internal/products/active",
     response_model=ProductListResponse,
@@ -437,3 +419,28 @@ async def internal_create_or_get_customer(
         temp_password=temp_password,
         is_new=True,
     )
+
+@router.patch(
+    "/internal/users/{user_id}/preferred-contact",
+    status_code=204,
+    include_in_schema=False,
+)
+async def internal_set_preferred_contact(
+    user_id: uuid.UUID,
+    payload: PreferredContactUpdate,
+    session: AsyncSession = Depends(get_db_session),
+) -> Response:
+    from sqlalchemy import select
+
+    user = (
+        await session.execute(
+            select(User).where(User.id == user_id, User.deleted_at.is_(None))
+        )
+    ).scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.preferred_contact = payload.preferred_contact
+    await session.commit()
+    return Response(status_code=204)

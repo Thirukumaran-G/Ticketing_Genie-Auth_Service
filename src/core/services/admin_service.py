@@ -14,6 +14,8 @@ from src.data.models.postgres.models import Company, CompanyProductSubscription,
 from src.data.repositories.admin_repository import AdminRepository
 from src.data.repositories.user_repository import UserRepository
 from src.observability.logging.logger import get_logger
+from src.core.exceptions.base import DomainRequiredException
+from src.core.exceptions.base import DescriptionRequiredException
 from src.schemas.admin_schemas import (
     AdminUserResponse,
     CompanyCreateRequest,
@@ -58,14 +60,18 @@ class AdminService:
     # ── Company ───────────────────────────────────────────────────────────────
 
     async def create_company(
-        self, payload: CompanyCreateRequest, actor_id: str
-    ) -> CompanyResponse:
-        if payload.domain:
-            existing = await self._admin_repo.get_company_by_domain(payload.domain)
-            if existing:
-                raise ConflictException(
-                    f"Company with domain '{payload.domain}' already exists."
-                )
+    self, payload: CompanyCreateRequest, actor_id: str
+) -> CompanyResponse:
+        # domain is now required at schema level, but guard just in case
+        if not payload.domain:
+            raise DomainRequiredException()
+
+        existing = await self._admin_repo.get_company_by_domain(payload.domain)
+        if existing:
+            raise ConflictException(
+                f"Company with domain '{payload.domain}' already exists."
+            )
+
         company = Company(
             name=payload.name,
             domain=payload.domain,
@@ -115,8 +121,10 @@ class AdminService:
     # ── Product ───────────────────────────────────────────────────────────────
 
     async def create_product(
-        self, payload: ProductCreateRequest, actor_id: str
-    ) -> ProductResponse:
+    self, payload: ProductCreateRequest, actor_id: str
+) -> ProductResponse:
+        if not payload.description or not payload.description.strip():
+            raise DescriptionRequiredException()
         existing = await self._admin_repo.get_product_by_code(payload.code)
         if existing:
             raise ConflictException(
@@ -125,6 +133,7 @@ class AdminService:
         product = Product(
             name=payload.name,
             code=payload.code,
+            description=payload.description.strip(),
             is_active=True,
             created_by=uuid.UUID(actor_id),
         )
@@ -146,18 +155,21 @@ class AdminService:
         return [ProductResponse.model_validate(p) for p in products]
 
     async def update_product(
-        self, product_id: uuid.UUID, payload: ProductUpdateRequest
-    ) -> ProductResponse:
+    self, product_id: uuid.UUID, payload: ProductUpdateRequest
+) -> ProductResponse:
         product = await self._admin_repo.get_product_by_id(product_id)
         if not product:
             raise NotFoundException("Product not found.")
+        if payload.description is not None and not payload.description.strip():
+            raise DescriptionRequiredException()
         changes = payload.model_dump(exclude_none=True)
+        if "description" in changes:
+            changes["description"] = changes["description"].strip()
         if changes:
             await self._admin_repo.update_product(product_id, changes)
             await self._session.commit()
         updated = await self._admin_repo.get_product_by_id(product_id)
         return ProductResponse.model_validate(updated)
-
     # ── Subscription ──────────────────────────────────────────────────────────
 
     async def assign_subscription(

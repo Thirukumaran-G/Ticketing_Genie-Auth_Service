@@ -4,16 +4,31 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic import BaseModel, EmailStr
+import re
+
 
 
 # ── Company ───────────────────────────────────────────────────────────────────
 
-class CompanyCreateRequest(BaseModel):
-    name:   str           = Field(..., min_length=1, max_length=255)
-    domain: Optional[str] = Field(default=None, max_length=255)
+DOMAIN_RE = re.compile(
+    r"^(?!-)"                     
+    r"(?:[a-zA-Z0-9-]{1,63}\.)"  
+    r"+[a-zA-Z]{2,}$"          
+)
 
+class CompanyCreateRequest(BaseModel):
+    name:   str = Field(..., min_length=1, max_length=255)
+    domain: str = Field(..., min_length=3, max_length=255)  
+
+    @field_validator("domain")
+    @classmethod
+    def validate_domain(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not DOMAIN_RE.match(v):
+            raise ValueError("Enter a valid domain (e.g. acme.com, genworx.ai, kongu.edu, sec.ac.in).")
+        return v
 
 class CompanyUpdateRequest(BaseModel):
     name:      Optional[str]  = Field(default=None, min_length=1, max_length=255)
@@ -107,7 +122,7 @@ class AdminUserResponse(BaseModel):
 class UserCreateRequest(BaseModel):
     email:             EmailStr
     full_name:         Optional[str] = None
-    role:              str                    # role name e.g. "agent", "team_lead"
+    role:              str                   
     preferred_contact: Optional[str] = "email"
 
 class RoleResponse(BaseModel):

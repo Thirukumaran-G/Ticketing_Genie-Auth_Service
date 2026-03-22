@@ -51,3 +51,16 @@ class TokenExpiredException(AuthenticationException):
 class TokenRevokedException(AuthenticationException):
     error_code = "TOKEN_REVOKED"
     message    = "Your session was ended. Please sign in again."
+
+class DomainRequiredException(ValidationException):
+    error_code = "DOMAIN_REQUIRED"
+    message    = "Domain is required to create a company."
+
+
+class InvalidDomainException(ValidationException):
+    error_code = "INVALID_DOMAIN"
+    message    = "Enter a valid domain (e.g. acme.com)."
+
+class DescriptionRequiredException(ValidationException):
+    error_code = "DESCRIPTION_REQUIRED"
+    message    = "Description is required to create a product."

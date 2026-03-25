@@ -1,43 +1,30 @@
 from __future__ import annotations
 
-import uuid
-
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.rest.dependencies import CurrentActor, get_current_actor
 from src.core.services.auth_service import AuthService
 from src.core.services.email_service_welcome import EmailService
-from src.data.clients.postgres_client import get_db_session, get_fresh_read_session
+from src.data.clients.postgres_client import get_db_session
 from src.schemas.auth_schemas import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
-    InternalUserCreateRequest,  
-    InternalUserCreateResponse,
     LoginRequest,
     LogoutRequest,
     MeResponse,
     MessageResponse,
     RefreshTokenRequest,
-    PreferredContactUpdate,
     RegisterResponse,
     ResetPasswordRequest,
     TokenPair,
-    TokenValidationResponse,
-    UserEmailResponse,
     UserRegisterRequest,
-    ProductListResponse,
-    CompanyByDomainResponse,
-    InternalCustomerCreateResponse,
-    InternalCustomerCreateRequest,
 )
-from pydantic import BaseModel as _BaseModel
-from src.data.models.postgres.models import Role, User
 
 # ── Cookie config ─────────────────────────────────────────────────────────────
-COOKIE_SECURE   = True   
+COOKIE_SECURE   = True
 COOKIE_SAMESITE = "none"
-REFRESH_MAX_AGE = 60 * 60 * 24 * 7  
+REFRESH_MAX_AGE = 60 * 60 * 24 * 7
 
 
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
@@ -56,11 +43,6 @@ def _clear_auth_cookies(response: Response) -> None:
     response.delete_cookie("refresh_token", path="/")
 
 
-class TierLookupResponse(_BaseModel):
-    tier_id:   str
-    tier_name: str
-
-
 router = APIRouter(prefix="", tags=["Authentication"])
 _email_service = EmailService()
 
@@ -69,7 +51,7 @@ def _get_service(session: AsyncSession = Depends(get_db_session)) -> AuthService
     return AuthService(session)
 
 
-# ── Public routes ─────────────────────────────────────────────────────────────
+# ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.post(
     "/register",
@@ -179,268 +161,3 @@ async def reset_password(
     service: AuthService = Depends(_get_service),
 ) -> MessageResponse:
     return await service.reset_password(payload)
-
-
-# ── Internal (hidden from docs) ───────────────────────────────────────────────
-
-@router.post(
-    "/internal/users",
-    response_model=InternalUserCreateResponse,
-    status_code=201,
-    include_in_schema=False,
-)
-async def internal_create_user(
-    payload: InternalUserCreateRequest,
-    service: AuthService = Depends(_get_service),
-) -> InternalUserCreateResponse:
-    return await service.internal_create_user(payload)
-
-
-@router.get("/internal/users/{user_id}", include_in_schema=False)
-async def get_user_internal(
-    user_id: str,
-    session: AsyncSession = Depends(get_db_session),
-):
-    user = await session.get(User, uuid.UUID(user_id))
-    if not user:
-        raise HTTPException(404)
-    role = await session.get(Role, user.role_id)
-    return {
-        "id":        str(user.id),
-        "email":     user.email,
-        "full_name": user.full_name,
-        "role":      role.name if role else None,
-        "is_active": user.is_active,
-        "preferred_contact":  user.preferred_contact,
-    }
-
-@router.get(
-    "/internal/users/{user_id}/email",
-    response_model=UserEmailResponse,
-    include_in_schema=False,
-)
-async def internal_get_user_email(
-    user_id: uuid.UUID,
-    service: AuthService = Depends(_get_service),
-) -> UserEmailResponse:
-    return await service.get_user_email(str(user_id))
-
-
-@router.get(
-    "/internal/tiers/by-name/{tier_name}",
-    response_model=TierLookupResponse,
-    include_in_schema=False,
-)
-async def internal_get_tier_by_name(
-    tier_name: str,
-    session:   AsyncSession = Depends(get_db_session),
-) -> TierLookupResponse:
-    from sqlalchemy import select
-    from src.data.models.postgres.models import Tier
-
-    result = await session.execute(
-        select(Tier).where(Tier.name == tier_name, Tier.is_active.is_(True))
-    )
-    tier = result.scalar_one_or_none()
-    if not tier:
-        raise HTTPException(status_code=404, detail=f"Tier '{tier_name}' not found")
-    return TierLookupResponse(tier_id=str(tier.id), tier_name=tier.name)
-
-
-@router.get(
-    "/internal/customers/{user_id}/tier",
-    response_model=TierLookupResponse,
-    include_in_schema=False,
-)
-async def internal_get_customer_tier(
-    user_id:    uuid.UUID,
-    product_id: uuid.UUID | None = None,
-    session:    AsyncSession = Depends(get_db_session),
-) -> TierLookupResponse:
-    from sqlalchemy import select
-    from src.data.models.postgres.models import CompanyProductSubscription, Tier
-
-    user = (
-        await session.execute(
-            select(User).where(User.id == user_id, User.is_active.is_(True))
-        )
-    ).scalar_one_or_none()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="Customer not found")
-    if not user.company_id:
-        raise HTTPException(status_code=404, detail="Customer has no associated company")
-
-    stmt = (
-        select(CompanyProductSubscription, Tier)
-        .join(Tier, Tier.id == CompanyProductSubscription.tier_id)
-        .where(
-            CompanyProductSubscription.company_id == user.company_id,
-            CompanyProductSubscription.is_active.is_(True),
-        )
-    )
-    if product_id:
-        stmt = stmt.where(CompanyProductSubscription.product_id == product_id)
-
-    row = (await session.execute(stmt)).first()
-    if not row:
-        raise HTTPException(
-            status_code=404,
-            detail="No active product subscription found for this customer",
-        )
-    _, tier = row
-    return TierLookupResponse(tier_id=str(tier.id), tier_name=tier.name)
-
-# get company
-@router.get(
-    "/internal/companies/by-domain/{domain}",
-    response_model=CompanyByDomainResponse,
-    include_in_schema=False,
-)
-async def internal_get_company_by_domain(
-    domain:  str,
-    session: AsyncSession = Depends(get_fresh_read_session),  # ← key change
-) -> CompanyByDomainResponse:
-    from sqlalchemy import select, func
-    from src.data.models.postgres.models import Company
-
-    result = await session.execute(
-        select(Company).where(
-            func.lower(Company.domain) == domain.lower().strip(),
-            Company.is_active.is_(True),
-        )
-    )
-    company = result.scalar_one_or_none()
-    if not company:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No active company for domain '{domain}'",
-        )
-    return CompanyByDomainResponse(
-        company_id=str(company.id),
-        company_name=company.name,
-        domain=company.domain or domain,
-    )
-
-# products
-@router.get(
-    "/internal/products/active",
-    response_model=ProductListResponse,
-    include_in_schema=False,
-)
-async def internal_list_active_products(
-    session: AsyncSession = Depends(get_fresh_read_session),  # ← key change
-) -> ProductListResponse:
-    from sqlalchemy import select
-    from src.data.models.postgres.models import Product
-
-    rows = (
-        await session.execute(
-            select(Product).where(Product.is_active.is_(True)).order_by(Product.name)
-        )
-    ).scalars().all()
-
-    return ProductListResponse(
-        products=[
-            {
-                "id":          str(p.id),
-                "name":        p.name,
-                "code":        p.code,
-                "description": p.description,
-            }
-            for p in rows
-        ]
-    )
-
-
-@router.post(
-    "/internal/customers/create-or-get",
-    response_model=InternalCustomerCreateResponse,
-    include_in_schema=False,
-)
-async def internal_create_or_get_customer(
-    payload: InternalCustomerCreateRequest,
-    service: AuthService = Depends(_get_service),
-    session: AsyncSession = Depends(get_db_session),
-) -> InternalCustomerCreateResponse:
-    from sqlalchemy import select, func
-    from src.data.models.postgres.models import User, Role
-    from src.utils.password_utils import hash_password, generate_secure_password
-    import uuid6
-
-    existing_result = await session.execute(
-        select(User).where(
-            func.lower(User.email) == payload.email.lower().strip(),
-            User.deleted_at.is_(None),
-        )
-    )
-    existing = existing_result.scalar_one_or_none()
-
-    if existing:
-        return InternalCustomerCreateResponse(
-            user_id=str(existing.id),
-            email=existing.email,
-            full_name=existing.full_name or "",
-            temp_password="",
-            is_new=False,
-        )
-
-    role_result = await session.execute(
-        select(Role).where(
-            func.lower(Role.name) == "customer",
-            Role.is_active.is_(True),
-        )
-    )
-    role = role_result.scalar_one_or_none()
-    if not role:
-        raise HTTPException(status_code=500, detail="Customer role not found — run seeder.")
-
-    temp_password = generate_secure_password(length=16)
-
-    new_user = User(
-        id=uuid6.uuid7(),
-        email=payload.email.lower().strip(),
-        hashed_password=hash_password(temp_password),
-        full_name=payload.full_name,
-        company_id=uuid.UUID(payload.company_id),
-        role_id=role.id,
-        preferred_contact=payload.preferred_contact,
-        is_active=True,
-    )
-    session.add(new_user)
-    await session.flush()
-    await session.refresh(new_user)
-    await session.commit()
-
-    return InternalCustomerCreateResponse(
-        user_id=str(new_user.id),
-        email=new_user.email,
-        full_name=new_user.full_name or "",
-        temp_password=temp_password,
-        is_new=True,
-    )
-
-@router.patch(
-    "/internal/users/{user_id}/preferred-contact",
-    status_code=204,
-    include_in_schema=False,
-)
-async def internal_set_preferred_contact(
-    user_id: uuid.UUID,
-    payload: PreferredContactUpdate,
-    session: AsyncSession = Depends(get_db_session),
-) -> Response:
-    from sqlalchemy import select
-
-    user = (
-        await session.execute(
-            select(User).where(User.id == user_id, User.deleted_at.is_(None))
-        )
-    ).scalar_one_or_none()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    user.preferred_contact = payload.preferred_contact
-    await session.commit()
-    return Response(status_code=204)

@@ -64,6 +64,7 @@ class ProductResponse(BaseModel):
     id:         uuid.UUID
     name:       str
     code:       str
+    description: str
     is_active:  bool
     created_at: datetime
 

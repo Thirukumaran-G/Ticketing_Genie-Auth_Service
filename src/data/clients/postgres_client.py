@@ -22,12 +22,6 @@ AsyncSessionFactory = async_sessionmaker(
     autocommit=False,
 )
 
-# ── Fresh-read engine — AUTOCOMMIT ────────────────────────────────────────────
-# Used only for internal read endpoints that must immediately see rows
-# committed by other services (e.g. admin creates a company, then the
-# email inbound worker checks by-domain within seconds).
-# AUTOCOMMIT = no transaction snapshot held between requests, every
-# SELECT reads the latest committed state straight from Postgres.
 fresh_read_engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
@@ -61,8 +55,6 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def get_fresh_read_session() -> AsyncGenerator[AsyncSession, None]:
-    """AUTOCOMMIT session — for reads that must see rows written by other
-    processes moments ago. Do NOT use for writes or multi-statement transactions."""
     async with FreshReadSessionFactory() as session:
         try:
             yield session

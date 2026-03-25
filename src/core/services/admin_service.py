@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions.base import ConflictException, NotFoundException
 from src.utils.password_utils import hash_password
-from src.core.services.email_service import EmailService
+from src.core.services.email_service_welcome import EmailService
 from src.data.models.postgres.models import Company, CompanyProductSubscription, Product, User
 from src.data.repositories.admin_repository import AdminRepository
 from src.data.repositories.user_repository import UserRepository

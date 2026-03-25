@@ -11,6 +11,7 @@ from src.api.middleware.error_handler import setup_error_handlers
 from src.api.middleware.trusedhost import setup_trusted_hosts
 from src.api.rest.routes.auth_routes import router as auth_router
 from src.api.rest.routes.admin_router import router as admin_router
+from src.api.rest.routes.internal_routers import router as internal_router
 from src.api.rest.routes.health import router as health_router
 from src.data.clients.postgres_client import get_db_session, engine
 from src.data.models.postgres.models import Base
@@ -123,6 +124,7 @@ def create_app() -> FastAPI:
     # ── Routers ───────────────────────────────────────────────────────────────
     app.include_router(health_router)
     app.include_router(auth_router, prefix=prefix)
+    app.include_router(internal_router, prefix=prefix)
     app.include_router(admin_router, prefix=prefix)
     
     return app

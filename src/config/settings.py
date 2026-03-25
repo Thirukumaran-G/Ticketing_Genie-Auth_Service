@@ -35,8 +35,13 @@ class Settings(BaseSettings):
     # middleware
     ALLOWED_ORIGINS: str
     TRUSTED_HOSTS: str
-    
-    
+
+    # Admin Details
+    ADMIN_EMAIL: str
+    ADMIN_PASSWORD: str
+    ADMIN_FULLNAME: str
+
+
 
     @field_validator("SECRET_KEY")
     @classmethod

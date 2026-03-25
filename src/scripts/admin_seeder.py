@@ -8,12 +8,13 @@ from src.data.clients.postgres_client import AsyncSessionFactory
 from src.data.models.postgres.models import Role, User
 from src.observability.logging.logger import get_logger
 from src.utils.password_utils import hash_password
+from src.config.settings import settings
 
 logger = get_logger(__name__)
 
-ADMIN_EMAIL    = "thirukumaran@ticketgenie.com"
-ADMIN_PASSWORD = "Vasanthi1981@"
-ADMIN_FULLNAME = "Thirukumaran G"
+ADMIN_EMAIL    = settings.ADMIN_EMAIL
+ADMIN_PASSWORD = settings.ADMIN_PASSWORD
+ADMIN_FULLNAME = settings.ADMIN_FULLNAME
 
 async def seed() -> None:
     async with AsyncSessionFactory() as session:

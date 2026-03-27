@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -16,16 +17,16 @@ _bearer = HTTPBearer(auto_error=False)
 class CurrentActor:
     actor_id:      str
     role:          str
-    email:         Optional[str]
-    company_id:    Optional[str]
-    product_tiers: Optional[dict]
+    email:         str | None
+    company_id:    str | None
+    product_tiers: dict[str, Any] | None
 
 
 async def get_current_actor(
     request:     Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> CurrentActor:
-    token: Optional[str] = None
+    token: str | None = None
 
     if credentials and credentials.credentials:
         token = credentials.credentials
@@ -46,13 +47,13 @@ async def get_current_actor(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired.",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
     except AuthenticationException as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from exc
 
     if payload.get("type") != "access":
         raise HTTPException(
@@ -69,7 +70,7 @@ async def get_current_actor(
     )
 
 
-def require_roles(*roles: str):
+def require_roles(*roles: str) -> Callable[..., Any]:
     async def _guard(
         actor: CurrentActor = Depends(get_current_actor),
     ) -> CurrentActor:

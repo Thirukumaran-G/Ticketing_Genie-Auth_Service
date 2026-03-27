@@ -1,26 +1,22 @@
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime
-from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-from pydantic import BaseModel, EmailStr
-import re
-
-
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 # ── Company ───────────────────────────────────────────────────────────────────
 
 DOMAIN_RE = re.compile(
-    r"^(?!-)"                     
-    r"(?:[a-zA-Z0-9-]{1,63}\.)"  
-    r"+[a-zA-Z]{2,}$"          
+    r"^(?!-)"
+    r"(?:[a-zA-Z0-9-]{1,63}\.)"
+    r"+[a-zA-Z]{2,}$"
 )
 
 class CompanyCreateRequest(BaseModel):
     name:   str = Field(..., min_length=1, max_length=255)
-    domain: str = Field(..., min_length=3, max_length=255)  
+    domain: str = Field(..., min_length=3, max_length=255)
 
     @field_validator("domain")
     @classmethod
@@ -31,9 +27,9 @@ class CompanyCreateRequest(BaseModel):
         return v
 
 class CompanyUpdateRequest(BaseModel):
-    name:      Optional[str]  = Field(default=None, min_length=1, max_length=255)
-    domain:    Optional[str]  = Field(default=None, max_length=255)
-    is_active: Optional[bool] = None
+    name:      str | None  = Field(default=None, min_length=1, max_length=255)
+    domain:    str | None  = Field(default=None, max_length=255)
+    is_active: bool | None = None
 
 
 class CompanyResponse(BaseModel):
@@ -41,7 +37,7 @@ class CompanyResponse(BaseModel):
 
     id:         uuid.UUID
     name:       str
-    domain:     Optional[str]
+    domain:     str | None
     is_active:  bool
     created_at: datetime
 
@@ -51,11 +47,13 @@ class CompanyResponse(BaseModel):
 class ProductCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     code: str = Field(..., min_length=1, max_length=100)
+    description: str = Field(..., min_length=1)
 
 
 class ProductUpdateRequest(BaseModel):
-    name:      Optional[str]  = Field(default=None, min_length=1, max_length=255)
-    is_active: Optional[bool] = None
+    name:      str | None  = Field(default=None, min_length=1, max_length=255)
+    is_active: bool | None = None
+    description: str | None = None
 
 
 class ProductResponse(BaseModel):
@@ -77,8 +75,8 @@ class SubscriptionAssignRequest(BaseModel):
 
 
 class SubscriptionUpdateRequest(BaseModel):
-    tier_id:   Optional[uuid.UUID] = None
-    is_active: Optional[bool]      = None
+    tier_id:   uuid.UUID | None = None
+    is_active: bool | None      = None
 
 
 class SubscriptionResponse(BaseModel):
@@ -102,7 +100,7 @@ class TierResponse(BaseModel):
 
     id:          uuid.UUID
     name:        str
-    description: Optional[str]
+    description: str | None
     is_active:   bool
 
 
@@ -113,21 +111,21 @@ class AdminUserResponse(BaseModel):
 
     id:         uuid.UUID
     email:      str
-    full_name:  Optional[str]
+    full_name:  str | None
     role:       str
-    company_id: Optional[uuid.UUID]
+    company_id: uuid.UUID | None
     is_active:  bool
-    last_login: Optional[datetime]
+    last_login: datetime | None
     created_at: datetime
 
 class UserCreateRequest(BaseModel):
     email:             EmailStr
-    full_name:         Optional[str] = None
-    role:              str                   
-    preferred_contact: Optional[str] = "email"
+    full_name:         str | None = None
+    role:              str
+    preferred_contact: str | None = "email"
 
 class RoleResponse(BaseModel):
     id:   uuid.UUID
     name: str
- 
+
     model_config = {"from_attributes": True}

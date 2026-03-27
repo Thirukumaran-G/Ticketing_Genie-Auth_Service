@@ -4,11 +4,11 @@ import asyncio
 
 from sqlalchemy import select
 
+from src.config.settings import settings
 from src.data.clients.postgres_client import AsyncSessionFactory
 from src.data.models.postgres.models import Role, User
 from src.observability.logging.logger import get_logger
 from src.utils.password_utils import hash_password
-from src.config.settings import settings
 
 logger = get_logger(__name__)
 
@@ -19,8 +19,8 @@ ADMIN_FULLNAME = settings.ADMIN_FULLNAME
 async def seed() -> None:
     async with AsyncSessionFactory() as session:
 
-        role_result = await session.execute(    
-            select(Role).where(Role.name == "admin", Role.is_active == True)
+        role_result = await session.execute(
+            select(Role).where(Role.name == "admin", Role.is_active.is_(True))
         )
         role = role_result.scalar_one_or_none()
         if not role:
@@ -46,10 +46,10 @@ async def seed() -> None:
         await session.commit()
 
         logger.info("admin_seeded", email=ADMIN_EMAIL)
-        print(f"\n✅ Admin seeded successfully.")
+        print("\n✅ Admin seeded successfully.")
         print(f"   Email    : {ADMIN_EMAIL}")
         print(f"   Password : {ADMIN_PASSWORD}")
-        print(f"   ⚠️  Change this password after first login!\n")
+        print("   ⚠️  Change this password after first login!\n")
 
 
 if __name__ == "__main__":

@@ -3,10 +3,9 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
-
 
 # ── Shared password validator ─────────────────────────────────────────────────
 
@@ -26,7 +25,7 @@ class UserRegisterRequest(BaseModel):
     email:     EmailStr
     password:  str           = Field(min_length=8, max_length=128)
     full_name: str           = Field(min_length=1, max_length=255)
-    ph_no:     Optional[str] = Field(default=None, max_length=20)
+    ph_no:     str | None = Field(default=None, max_length=20)
 
     @field_validator("password")
     @classmethod
@@ -35,7 +34,7 @@ class UserRegisterRequest(BaseModel):
 
     @field_validator("ph_no")
     @classmethod
-    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+    def validate_phone(cls, v: str | None) -> str | None:
         if v is None or v.strip() == "":
             return None
         digits = re.sub(r"\D", "", v)
@@ -49,7 +48,7 @@ class UserRegisterRequest(BaseModel):
 class RegisterResponse(BaseModel):
     id:         uuid.UUID
     email:      str
-    full_name:  Optional[str]
+    full_name:  str | None
     role:       str
     company_id: uuid.UUID
     created_at: datetime
@@ -91,9 +90,9 @@ class TokenValidationResponse(BaseModel):
     actor_id:      str
     role:          str
     scopes:        list[str]
-    email:         Optional[str]                         = None
-    company_id:    Optional[str]                         = None
-    product_tiers: Optional[Dict[str, ProductTierInfo]] = None
+    email:         str | None                         = None
+    company_id:    str | None                         = None
+    product_tiers: dict[str, ProductTierInfo] | None = None
 
 
 # ── Me ────────────────────────────────────────────────────────────────────────
@@ -101,11 +100,11 @@ class TokenValidationResponse(BaseModel):
 class MeResponse(BaseModel):
     actor_id:          uuid.UUID
     email:             str
-    full_name:         Optional[str]
+    full_name:         str | None
     role:              str
-    preferred_contact: Optional[str]                        = None
-    company_id:        Optional[uuid.UUID]                  = None
-    product_tiers:     Optional[Dict[str, ProductTierInfo]] = None
+    preferred_contact: str | None                        = None
+    company_id:        uuid.UUID | None                  = None
+    product_tiers:     dict[str, ProductTierInfo] | None = None
     is_active:         bool
 
     model_config = {"from_attributes": True}
@@ -150,7 +149,7 @@ class InternalUserCreateRequest(BaseModel):
 class InternalUserCreateResponse(BaseModel):
     user_id:       uuid.UUID
     email:         str
-    full_name:     Optional[str]
+    full_name:     str | None
     role:          str
     temp_password: str
 
@@ -173,7 +172,7 @@ class MessageResponse(BaseModel):
 
 
 class ProductListResponse(BaseModel):
-    products: list[dict]
+    products: list[dict[str, Any]]
 
 
 class CompanyByDomainResponse(BaseModel):

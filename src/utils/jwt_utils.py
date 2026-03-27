@@ -1,10 +1,10 @@
-### AUTH JWT 
+### AUTH JWT
 
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any
 
 from jose import JWTError, jwt
 
@@ -29,9 +29,9 @@ def get_scopes_for_role(role_name: str) -> list[str]:
 def create_access_token(
     actor_id:      str,
     role_name:     str,
-    email:         Optional[str]                         = None,
-    company_id:    Optional[str]                         = None,
-    product_tiers: Optional[Dict[str, Any]]              = None,
+    email:         str | None                         = None,
+    company_id:    str | None                         = None,
+    product_tiers: dict[str, Any] | None              = None,
 ) -> tuple[str, datetime]:
     """
     JWT payload:
@@ -66,8 +66,8 @@ def create_access_token(
 def create_refresh_token(
     actor_id:   str,
     role_name:  str,
-    family_id:  Optional[str] = None,
-    session_id: Optional[str] = None,
+    family_id:  str | None = None,
+    session_id: str | None = None,
 ) -> tuple[str, str, str, datetime]:
     """Returns (token_str, jti, session_id, expires_at)."""
     expire = _now() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)

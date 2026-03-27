@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import uuid
-from typing import List
 
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,13 +49,13 @@ async def create_company(
 
 @router.get(
     "/companies",
-    response_model=List[CompanyResponse],
+    response_model=list[CompanyResponse],
     summary="List all companies",
 )
 async def list_companies(
     actor:   CurrentActor = Depends(require_roles("admin")),
     service: AdminService = Depends(_svc),
-) -> List[CompanyResponse]:
+) -> list[CompanyResponse]:
     return await service.list_companies()
 
 
@@ -119,12 +118,12 @@ async def create_product(
 
 @router.get(
     "/products",
-    response_model=List[ProductResponse],
+    response_model=list[ProductResponse],
     summary="List all products",
 )
 async def list_products(
     service: AdminService = Depends(_svc),
-) -> List[ProductResponse]:
+) -> list[ProductResponse]:
     return await service.list_products()
 
 
@@ -175,14 +174,14 @@ async def assign_subscription(
 
 @router.get(
     "/companies/{company_id}/subscriptions",
-    response_model=List[SubscriptionResponse],
+    response_model=list[SubscriptionResponse],
     summary="List subscriptions for a company",
 )
 async def list_subscriptions(
     company_id: uuid.UUID,
     actor:      CurrentActor = Depends(require_roles("admin")),
     service:    AdminService = Depends(_svc),
-) -> List[SubscriptionResponse]:
+) -> list[SubscriptionResponse]:
     return await service.list_subscriptions(company_id)
 
 
@@ -222,13 +221,13 @@ async def delete_subscription(
 
 @router.get(
     "/tiers",
-    response_model=List[TierResponse],
+    response_model=list[TierResponse],
     summary="List available tiers",
 )
 async def list_tiers(
     actor:   CurrentActor = Depends(require_roles("admin")),
     service: AdminService = Depends(_svc),
-) -> List[TierResponse]:
+) -> list[TierResponse]:
     return await service.list_tiers()
 
 
@@ -236,13 +235,13 @@ async def list_tiers(
 
 @router.get(
     "/roles",
-    response_model=List[RoleResponse],
+    response_model=list[RoleResponse],
     summary="List available roles",
 )
 async def list_roles(
     actor:   CurrentActor = Depends(require_roles("admin")),
     service: AdminService = Depends(_svc),
-) -> List[RoleResponse]:
+) -> list[RoleResponse]:
     return await service.list_roles()
 
 
@@ -250,13 +249,13 @@ async def list_roles(
 
 @router.get(
     "/users",
-    response_model=List[AdminUserResponse],
+    response_model=list[AdminUserResponse],
     summary="List all users",
 )
 async def list_users(
     actor:   CurrentActor = Depends(require_roles("admin")),
     service: AdminService = Depends(_svc),
-) -> List[AdminUserResponse]:
+) -> list[AdminUserResponse]:
     return await service.list_users()
 
 

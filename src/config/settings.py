@@ -1,21 +1,21 @@
-from pydantic import Field, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     # App
     APP_NAME: str
-    APP_URL: str 
+    APP_URL: str
     SERVICE_NAME: str
     LOG_LEVEL: str
     DEBUG: bool
 
     # Database
-    DATABASE_URL: str 
+    DATABASE_URL: str
     PORT: int
 
     # JWT
-    SECRET_KEY: str                       
+    SECRET_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     JWT_ALGORITHM: str = "HS256"
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str
     SMTP_FROM_NAME: str
     SMTP_USE_TLS: bool
-    
+
     # middleware
     ALLOWED_ORIGINS: str
     TRUSTED_HOSTS: str

@@ -1,6 +1,7 @@
-# Auth service 
+# Auth service
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
@@ -9,19 +10,19 @@ from sqlalchemy import text
 from src.api.middleware.cors import setup_cors
 from src.api.middleware.error_handler import setup_error_handlers
 from src.api.middleware.trusedhost import setup_trusted_hosts
-from src.api.rest.routes.auth_routes import router as auth_router
 from src.api.rest.routes.admin_router import router as admin_router
-from src.api.rest.routes.internal_routers import router as internal_router
+from src.api.rest.routes.auth_routes import router as auth_router
 from src.api.rest.routes.health import router as health_router
-from src.data.clients.postgres_client import get_db_session, engine
+from src.api.rest.routes.internal_routers import router as internal_router
+from src.data.clients.postgres_client import engine, get_db_session
 from src.data.models.postgres.models import Base
-from src.scripts.role_tier_seeder import seed as tier_seeder
+from src.observability.logging.logger import configure_logging, get_logger
+from src.scripts.admin_seeder import seed as admin_seeder
 from src.scripts.company_seeder import seed as company_seeder
 from src.scripts.product_seeder import seed as product_seeder
-from src.scripts.admin_seeder import seed as admin_seeder
-from src.scripts.user_seeder import seed as user_seeder
+from src.scripts.role_tier_seeder import seed as tier_seeder
 from src.scripts.subscription_seeder import seed as subscription_seeder
-from src.observability.logging.logger import configure_logging, get_logger
+from src.scripts.user_seeder import seed as user_seeder
 
 logger = get_logger(__name__)
 
@@ -36,8 +37,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("database_tables_created")
 
-    # Seed roles and tiers 
-    async for session in get_db_session():
+    # Seed roles and tiers
+    async for _session in get_db_session():
         await tier_seeder()
         await company_seeder()
         await product_seeder()
@@ -126,5 +127,5 @@ def create_app() -> FastAPI:
     app.include_router(auth_router, prefix=prefix)
     app.include_router(internal_router, prefix=prefix)
     app.include_router(admin_router, prefix=prefix)
-    
+
     return app

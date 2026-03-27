@@ -1,20 +1,19 @@
 from __future__ import annotations
 
 import uuid
-from typing import Optional
+from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.data.models.postgres.models import User
+from src.data.repositories.internal_repository import InternalRepository
 from src.schemas.auth_schemas import (
     InternalCustomerCreateRequest,
     InternalCustomerCreateResponse,
     PreferredContactUpdate,
 )
 from src.utils.password_utils import generate_secure_password, hash_password
-
-from src.data.repositories.internal_repository import InternalRepository
 
 try:
     import uuid6
@@ -31,7 +30,7 @@ class InternalAuthService:
 
     # ── User ──────────────────────────────────────────────────────────────────
 
-    async def get_user_with_role(self, user_id: str) -> dict:
+    async def get_user_with_role(self, user_id: str) -> dict[str, Any]:
         user = await self._repo.get_user_by_id(uuid.UUID(user_id))
         if not user:
             raise HTTPException(status_code=404)
@@ -57,7 +56,7 @@ class InternalAuthService:
 
     # ── Tier ──────────────────────────────────────────────────────────────────
 
-    async def get_tier_by_name(self, tier_name: str) -> dict:
+    async def get_tier_by_name(self, tier_name: str) -> dict[str, Any]:
         tier = await self._repo.get_tier_by_name(tier_name)
         if not tier:
             raise HTTPException(
@@ -68,8 +67,8 @@ class InternalAuthService:
     async def get_customer_tier(
         self,
         user_id: uuid.UUID,
-        product_id: Optional[uuid.UUID] = None,
-    ) -> dict:
+        product_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]:
         user = await self._repo.get_active_user_by_id(user_id)
         if not user:
             raise HTTPException(status_code=404, detail="Customer not found")
@@ -89,7 +88,7 @@ class InternalAuthService:
 
     # ── Company ───────────────────────────────────────────────────────────────
 
-    async def get_company_by_domain(self, domain: str) -> dict:
+    async def get_company_by_domain(self, domain: str) -> dict[str, Any]:
         company = await self._repo.get_company_by_domain(domain)
         if not company:
             raise HTTPException(
@@ -104,7 +103,7 @@ class InternalAuthService:
 
     # ── Product ───────────────────────────────────────────────────────────────
 
-    async def list_active_products(self) -> dict:
+    async def list_active_products(self) -> dict[str, Any]:
         products = await self._repo.list_active_products()
         return {
             "products": [

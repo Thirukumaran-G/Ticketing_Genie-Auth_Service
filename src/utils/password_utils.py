@@ -1,7 +1,7 @@
-from passlib.context import CryptContext
 import secrets
 import string
 
+from passlib.context import CryptContext
 
 _pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 

@@ -3,11 +3,12 @@ from __future__ import annotations
 import hashlib
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config.settings import settings
 from src.core.exceptions.base import (
     AuthenticationException,
     ConflictException,
@@ -31,12 +32,14 @@ from src.schemas.auth_schemas import (
     RegisterResponse,
     ResetPasswordRequest,
     TokenPair,
-    TokenValidationResponse,
     UserRegisterRequest,
 )
 from src.utils.jwt_utils import create_access_token, create_refresh_token, decode_token
-from src.config.settings import settings
-from src.utils.password_utils import generate_secure_password, hash_password, verify_password
+from src.utils.password_utils import (
+    generate_secure_password,
+    hash_password,
+    verify_password,
+)
 
 logger = get_logger(__name__)
 
@@ -144,11 +147,11 @@ class AuthService:
             raise AuthenticationException("No role assigned to this account.")
 
         await self._user_repo.update_fields(
-            user.id, {"last_login": datetime.now(timezone.utc)}
+            user.id, {"last_login": datetime.now(UTC)}
         )
 
-        product_tiers: Optional[Dict] = None
-        company_id:    Optional[str]  = None
+        product_tiers: dict[str, Any] | None = None
+        company_id:    str | None  = None
 
         if role_name == "customer":
             if not user.company_id:
@@ -173,10 +176,10 @@ class AuthService:
         self,
         user_id:       uuid.UUID,
         role_name:     str,
-        email:         Optional[str]  = None,
-        company_id:    Optional[str]  = None,
-        product_tiers: Optional[Dict] = None,
-        family_id:     Optional[str]  = None,
+        email:         str | None  = None,
+        company_id:    str | None  = None,
+        product_tiers: dict[str, Any] | None = None,
+        family_id:     str | None  = None,
     ) -> TokenPair:
         fid        = family_id or str(uuid.uuid4())
         session_id = str(uuid.uuid4())
@@ -221,7 +224,6 @@ class AuthService:
         jti         = payload["jti"]
         family_id   = payload["family_id"]
         user_id_str = payload["sub"]
-        role_name   = payload["role"]
 
         token_record = await self._token_repo.get_by_jti(jti)
         if not token_record:
@@ -245,8 +247,8 @@ class AuthService:
         if not resolved_role:
             raise AuthenticationException("No role assigned. Contact support.")
 
-        product_tiers: Optional[Dict] = None
-        company_id:    Optional[str]  = None
+        product_tiers: dict[str, Any] | None = None
+        company_id:    str | None  = None
 
         if resolved_role == "customer":
             if not user.company_id:
@@ -289,7 +291,7 @@ class AuthService:
         if not role_name:
             raise NotFoundException("No role assigned to this account.")
 
-        product_tiers: Optional[Dict] = None
+        product_tiers: dict[str, Any] | None = None
         if role_name == "customer" and user.company_id:
             product_tiers = await self._user_repo.get_product_tiers_for_company(user.company_id)
 
@@ -325,19 +327,19 @@ class AuthService:
 
     async def forgot_password(
         self, payload: ForgotPasswordRequest
-    ) -> Optional[tuple[str, User]]:
+    ) -> tuple[str, User] | None:
         user = await self._user_repo.get_by_email(payload.email)
         if not user or not user.is_active or user.deleted_at is not None:
             return None
         await self._reset_repo.invalidate_existing(user.id)
-        await self._session.flush() 
+        await self._session.flush()
 
         # Step 2: generate a fresh token and insert it
         raw_token = secrets.token_urlsafe(48)
         reset = PasswordResetToken(
             user_id=user.id,
             token_hash=_hash_token(raw_token),
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=_RESET_EXPIRE_MINUTES),
+            expires_at=datetime.now(UTC) + timedelta(minutes=_RESET_EXPIRE_MINUTES),
         )
         await self._reset_repo.create(reset)
         await self._session.commit()
@@ -372,7 +374,7 @@ class AuthService:
 
     # ── Get user email (internal) ─────────────────────────────────────────────
 
-    async def get_user_email(self, user_id: str) -> dict:
+    async def get_user_email(self, user_id: str) -> dict[str, Any]:
         user = await self._user_repo.get_active_by_id(user_id)
         if not user:
             raise NotFoundException(f"User {user_id} not found.")

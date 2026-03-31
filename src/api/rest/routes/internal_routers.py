@@ -1,3 +1,4 @@
+# auth internal route
 from __future__ import annotations
 
 import uuid
@@ -17,8 +18,11 @@ from src.schemas.auth_schemas import (
     InternalUserCreateRequest,
     InternalUserCreateResponse,
     PreferredContactUpdate,
+    ProductIdListRequest,
     ProductListResponse,
     UserEmailResponse,
+    SubscribedProductItem,
+    SubscribedProductsResponse
 )
 
 
@@ -153,6 +157,18 @@ async def internal_list_active_products(
 ) -> ProductListResponse:
     result = await service.list_active_products()
     return ProductListResponse(**result)
+
+@router.post(
+    "/products/by-ids",
+    response_model=SubscribedProductsResponse,
+    include_in_schema=False,
+)
+async def internal_list_products_by_ids(
+    payload: ProductIdListRequest,
+    service: InternalAuthService = Depends(_get_internal_read_service),
+) -> SubscribedProductsResponse:
+    products = await service.list_products_by_ids(payload.product_ids)
+    return SubscribedProductsResponse(products=products)
 
 
 # ── Customer routes ────────────────────────────────────────────────────────────

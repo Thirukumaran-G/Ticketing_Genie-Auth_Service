@@ -174,6 +174,9 @@ class MessageResponse(BaseModel):
 class ProductListResponse(BaseModel):
     products: list[dict[str, Any]]
 
+class ProductIdListRequest(BaseModel):
+    product_ids: list[str]
+
 
 class CompanyByDomainResponse(BaseModel):
     company_id:   str
@@ -197,3 +200,11 @@ class InternalCustomerCreateResponse(BaseModel):
 
 class PreferredContactUpdate(BaseModel):
     preferred_contact: str
+
+class SubscribedProductItem(BaseModel):
+    id:   str
+    name: str
+    code: str
+
+class SubscribedProductsResponse(BaseModel):
+    products: list[SubscribedProductItem]

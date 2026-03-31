@@ -85,6 +85,7 @@ class InternalAuthService:
             )
         _, tier = row
         return {"tier_id": str(tier.id), "tier_name": tier.name}
+    
 
     # ── Company ───────────────────────────────────────────────────────────────
 
@@ -100,6 +101,18 @@ class InternalAuthService:
             "company_name": company.name,
             "domain": company.domain or domain,
         }
+    
+    async def list_products_by_ids(self, product_ids: list[str]) -> list[dict]:
+        from sqlalchemy import select
+        from src.data.models.postgres.models import Product
+        import uuid
+        uuids = [uuid.UUID(pid) for pid in product_ids]
+        result = await self._session.execute(
+            select(Product.id, Product.name, Product.code)
+            .where(Product.id.in_(uuids), Product.is_active.is_(True))
+            .order_by(Product.name)
+        )
+        return [{"id": str(r.id), "name": r.name, "code": r.code} for r in result.all()]
 
     # ── Product ───────────────────────────────────────────────────────────────
 

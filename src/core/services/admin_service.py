@@ -3,19 +3,25 @@ from __future__ import annotations
 import secrets
 import string
 import uuid
-from typing import List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.exceptions.base import ConflictException, NotFoundException
-from src.utils.password_utils import hash_password
+from src.core.exceptions.base import (
+    ConflictException,
+    DescriptionRequiredException,
+    DomainRequiredException,
+    NotFoundException,
+)
 from src.core.services.email_service_welcome import EmailService
-from src.data.models.postgres.models import Company, CompanyProductSubscription, Product, User
+from src.data.models.postgres.models import (
+    Company,
+    CompanyProductSubscription,
+    Product,
+    User,
+)
 from src.data.repositories.admin_repository import AdminRepository
 from src.data.repositories.user_repository import UserRepository
 from src.observability.logging.logger import get_logger
-from src.core.exceptions.base import DomainRequiredException
-from src.core.exceptions.base import DescriptionRequiredException
 from src.schemas.admin_schemas import (
     AdminUserResponse,
     CompanyCreateRequest,
@@ -31,6 +37,7 @@ from src.schemas.admin_schemas import (
     TierResponse,
     UserCreateRequest,
 )
+from src.utils.password_utils import hash_password
 
 logger = get_logger(__name__)
 
@@ -97,7 +104,7 @@ class AdminService:
             raise NotFoundException("Company not found.")
         return CompanyResponse.model_validate(company)
 
-    async def list_companies(self) -> List[CompanyResponse]:
+    async def list_companies(self) -> list[CompanyResponse]:
         companies = await self._admin_repo.list_companies()
         return [CompanyResponse.model_validate(c) for c in companies]
 
@@ -150,7 +157,7 @@ class AdminService:
         await self._session.commit()
         logger.info("product_deleted", product_id=str(product_id))
 
-    async def list_products(self) -> List[ProductResponse]:
+    async def list_products(self) -> list[ProductResponse]:
         products = await self._admin_repo.list_products()
         return [ProductResponse.model_validate(p) for p in products]
 
@@ -240,19 +247,27 @@ class AdminService:
             await self._admin_repo.update_subscription(subscription_id, changes)
             await self._session.commit()
         updated = await self._admin_repo.get_subscription_by_id(subscription_id)
+        if not updated:
+            raise NotFoundException("Subscription not found.")
         return await self._build_sub_response(updated)
 
     async def list_subscriptions(
         self, company_id: uuid.UUID
-    ) -> List[SubscriptionResponse]:
+    ) -> list[SubscriptionResponse]:
         subs = await self._admin_repo.list_subscriptions(company_id)
         return [await self._build_sub_response(s) for s in subs]
 
     async def _build_sub_response(
-        self, sub: CompanyProductSubscription
-    ) -> SubscriptionResponse:
+    self, sub: CompanyProductSubscription
+) -> SubscriptionResponse:
         product = await self._admin_repo.get_product_by_id(sub.product_id)
-        tier    = await self._admin_repo.get_tier_by_id(sub.tier_id)
+        if not product:
+            raise NotFoundException("Product not found.")
+
+        tier = await self._admin_repo.get_tier_by_id(sub.tier_id)
+        if not tier:
+            raise NotFoundException("Tier not found.")
+
         return SubscriptionResponse(
             id=sub.id,
             company_id=sub.company_id,
@@ -267,19 +282,19 @@ class AdminService:
 
     # ── Tiers ─────────────────────────────────────────────────────────────────
 
-    async def list_tiers(self) -> List[TierResponse]:
+    async def list_tiers(self) -> list[TierResponse]:
         tiers = await self._admin_repo.list_tiers()
         return [TierResponse.model_validate(t) for t in tiers]
 
     # ── Roles ─────────────────────────────────────────────────────────────────
 
-    async def list_roles(self) -> List[RoleResponse]:
+    async def list_roles(self) -> list[RoleResponse]:
         roles = await self._admin_repo.list_roles()
         return [RoleResponse.model_validate(r) for r in roles]
 
     # ── Users ─────────────────────────────────────────────────────────────────
 
-    async def list_users(self) -> List[AdminUserResponse]:
+    async def list_users(self) -> list[AdminUserResponse]:
         users = await self._admin_repo.list_users()
         result = []
         for user in users:
@@ -323,7 +338,7 @@ class AdminService:
         logger.info("user_created_by_admin", user_id=str(created.id), role=payload.role)
 
         try:
-            await _EMAIL_SVC.send_welcome_credentials(
+             _EMAIL_SVC.send_welcome_credentials(
                 to_email=created.email,
                 full_name=created.full_name,
                 role=payload.role,
@@ -346,6 +361,7 @@ class AdminService:
     async def hard_delete_user(self, user_id: uuid.UUID) -> None:
         """Permanently remove a user row from the database."""
         from sqlalchemy import delete
+
         from src.data.models.postgres.models import User
 
         user = await self._session.get(User, user_id)

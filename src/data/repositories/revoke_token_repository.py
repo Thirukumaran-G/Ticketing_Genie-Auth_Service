@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +19,7 @@ class RevokeTokenRepository:
         await self._s.flush()
         return token
 
-    async def get_by_jti(self, jti: str) -> Optional[RevokeToken]:
+    async def get_by_jti(self, jti: str) -> RevokeToken | None:
         result = await self._s.execute(
             select(RevokeToken).where(RevokeToken.jti == jti)
         )
@@ -30,7 +29,7 @@ class RevokeTokenRepository:
         await self._s.execute(
             update(RevokeToken)
             .where(RevokeToken.jti == jti)
-            .values(is_revoked=True, revoked_at=datetime.now(timezone.utc))
+            .values(is_revoked=True, revoked_at=datetime.now(UTC))
         )
 
     async def revoke_family(self, family_id: str) -> None:
@@ -39,9 +38,9 @@ class RevokeTokenRepository:
             update(RevokeToken)
             .where(
                 RevokeToken.family_id  == family_id,
-                RevokeToken.is_revoked == False,
+                RevokeToken.is_revoked.is_(False),
             )
-            .values(is_revoked=True, revoked_at=datetime.now(timezone.utc))
+            .values(is_revoked=True, revoked_at=datetime.now(UTC))
         )
 
     async def revoke_all_for_user(self, user_id: uuid.UUID) -> None:
@@ -50,7 +49,7 @@ class RevokeTokenRepository:
             update(RevokeToken)
             .where(
                 RevokeToken.user_id    == user_id,
-                RevokeToken.is_revoked == False,
+                RevokeToken.is_revoked.is_(False),
             )
-            .values(is_revoked=True, revoked_at=datetime.now(timezone.utc))
+            .values(is_revoked=True, revoked_at=datetime.now(UTC))
         )

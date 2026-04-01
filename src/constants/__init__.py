@@ -1,5 +1,6 @@
 import enum
 
+
 class RoleCode(str, enum.Enum):
     CUSTOMER  = "customer"
     AGENT     = "agent"

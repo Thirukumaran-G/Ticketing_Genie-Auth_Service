@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
+from typing import Literal
+
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.rest.dependencies import CurrentActor, get_current_actor
@@ -14,7 +23,6 @@ from src.schemas.auth_schemas import (
     LogoutRequest,
     MeResponse,
     MessageResponse,
-    RefreshTokenRequest,
     RegisterResponse,
     ResetPasswordRequest,
     TokenPair,
@@ -23,7 +31,7 @@ from src.schemas.auth_schemas import (
 
 # ── Cookie config ─────────────────────────────────────────────────────────────
 COOKIE_SECURE   = True
-COOKIE_SAMESITE = "none"
+COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "none"
 REFRESH_MAX_AGE = 60 * 60 * 24 * 7
 
 

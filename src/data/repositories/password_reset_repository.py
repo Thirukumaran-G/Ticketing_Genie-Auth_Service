@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,12 +19,12 @@ class PasswordResetRepository:
         await self._s.flush()
         return reset
 
-    async def get_valid_token(self, token_hash: str) -> Optional[PasswordResetToken]:
+    async def get_valid_token(self, token_hash: str) -> PasswordResetToken | None:
         result = await self._s.execute(
             select(PasswordResetToken).where(
                 PasswordResetToken.token_hash == token_hash,
-                PasswordResetToken.is_used    == False,
-                PasswordResetToken.expires_at >  datetime.now(timezone.utc),
+                PasswordResetToken.is_used.is_(False),
+                PasswordResetToken.expires_at >  datetime.now(UTC),
             )
         )
         return result.scalar_one_or_none()
@@ -35,14 +34,14 @@ class PasswordResetRepository:
             update(PasswordResetToken)
             .where(
                 PasswordResetToken.user_id  == user_id,
-                PasswordResetToken.is_used  == False,
+                PasswordResetToken.is_used.is_(False)
             )
-            .values(is_used=True, used_at=datetime.now(timezone.utc))
+            .values(is_used=True, used_at=datetime.now(UTC))
         )
 
     async def mark_used(self, reset_id: uuid.UUID) -> None:
         await self._s.execute(
             update(PasswordResetToken)
             .where(PasswordResetToken.id == reset_id)
-            .values(is_used=True, used_at=datetime.now(timezone.utc))
+            .values(is_used=True, used_at=datetime.now(UTC))
         )

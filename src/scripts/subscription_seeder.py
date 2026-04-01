@@ -5,7 +5,12 @@ import asyncio
 from sqlalchemy import select
 
 from src.data.clients.postgres_client import AsyncSessionFactory
-from src.data.models.postgres.models import Company, CompanyProductSubscription, Product, Tier
+from src.data.models.postgres.models import (
+    Company,
+    CompanyProductSubscription,
+    Product,
+    Tier,
+)
 from src.observability.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -28,7 +33,7 @@ async def seed() -> None:
             company_result = await session.execute(
                 select(Company).where(
                     Company.domain    == domain,
-                    Company.is_active == True,
+                    Company.is_active.is_(True),
                 )
             )
             company = company_result.scalar_one_or_none()
@@ -45,7 +50,7 @@ async def seed() -> None:
                 product_result = await session.execute(
                     select(Product).where(
                         Product.code      == product_code,
-                        Product.is_active == True,
+                        Product.is_active.is_(True),
                     )
                 )
                 product = product_result.scalar_one_or_none()
@@ -58,7 +63,7 @@ async def seed() -> None:
                 tier_result = await session.execute(
                     select(Tier).where(
                         Tier.name      == tier_name,
-                        Tier.is_active == True,
+                        Tier.is_active.is_(True),
                     )
                 )
                 tier = tier_result.scalar_one_or_none()
@@ -72,7 +77,7 @@ async def seed() -> None:
                     select(CompanyProductSubscription).where(
                         CompanyProductSubscription.company_id == company.id,
                         CompanyProductSubscription.product_id == product.id,
-                        CompanyProductSubscription.is_active  == True,
+                        CompanyProductSubscription.is_active.is_(True),
                     )
                 )
                 if existing_result.scalar_one_or_none():

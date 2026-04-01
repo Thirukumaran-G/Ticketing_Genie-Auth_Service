@@ -1,12 +1,15 @@
+# auth internal route
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel as _BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.services.auth_service import AuthService
+from src.core.services.internal_service import InternalAuthService
 from src.data.clients.postgres_client import get_db_session, get_fresh_read_session
 from src.schemas.auth_schemas import (
     CompanyByDomainResponse,
@@ -15,10 +18,12 @@ from src.schemas.auth_schemas import (
     InternalUserCreateRequest,
     InternalUserCreateResponse,
     PreferredContactUpdate,
+    ProductIdListRequest,
     ProductListResponse,
     UserEmailResponse,
+    SubscribedProductItem,
+    SubscribedProductsResponse
 )
-from src.core.services.internal_service import InternalAuthService
 
 
 class TierLookupResponse(_BaseModel):
@@ -66,7 +71,7 @@ async def internal_create_user(
 async def get_user_internal(
     user_id: str,
     service: InternalAuthService = Depends(_get_internal_service),
-) -> dict:
+) -> dict[str, Any]:
     return await service.get_user_with_role(user_id)
 
 
@@ -78,7 +83,7 @@ async def get_user_internal(
 async def internal_get_user_email(
     user_id: uuid.UUID,
     service: AuthService = Depends(_get_auth_service),
-) -> UserEmailResponse:
+) -> dict[str,Any]:
     return await service.get_user_email(str(user_id))
 
 
@@ -152,6 +157,18 @@ async def internal_list_active_products(
 ) -> ProductListResponse:
     result = await service.list_active_products()
     return ProductListResponse(**result)
+
+@router.post(
+    "/products/by-ids",
+    response_model=SubscribedProductsResponse,
+    include_in_schema=False,
+)
+async def internal_list_products_by_ids(
+    payload: ProductIdListRequest,
+    service: InternalAuthService = Depends(_get_internal_read_service),
+) -> SubscribedProductsResponse:
+    products = await service.list_products_by_ids(payload.product_ids)
+    return SubscribedProductsResponse(products=products)
 
 
 # ── Customer routes ────────────────────────────────────────────────────────────

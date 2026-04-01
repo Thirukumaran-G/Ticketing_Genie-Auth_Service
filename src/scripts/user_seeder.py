@@ -1,20 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 from sqlalchemy import select
 
+from src.core.services.email_service_welcome import EmailService
 from src.data.clients.postgres_client import AsyncSessionFactory
 from src.data.models.postgres.models import Role, User
-from src.core.services.email_service_welcome import EmailService
 from src.observability.logging.logger import get_logger
-from src.utils.password_utils import generate_secure_password, hash_password
+from src.utils.password_utils import hash_password
 
 logger     = get_logger(__name__)
 _email_svc = EmailService()
 
 # ── Staff to seed ─────────────────────────────────────────────────────────────
-STAFF: list[dict] = [
+STAFF: list[dict[str, Any]] = [
     {"email": "vimalsrinivasansn@gmail.com",          "full_name": "Vimal Srinivasan",  "role": "agent"},
     {"email": "j.d.rudresh@gmail.com",                "full_name": "Rudresh JD",        "role": "agent"},
     {"email": "sylendravinayak@gmail.com",             "full_name": "Sylendra Vinayak",  "role": "agent"},
@@ -36,12 +37,12 @@ async def seed() -> None:
 
         # pre-load roles
         agent_result = await session.execute(
-            select(Role).where(Role.name == "agent", Role.is_active == True)
+            select(Role).where(Role.name == "agent", Role.is_active.is_(True))
         )
         agent_role = agent_result.scalar_one_or_none()
 
         lead_result = await session.execute(
-            select(Role).where(Role.name == "team_lead", Role.is_active == True)
+            select(Role).where(Role.name == "team_lead", Role.is_active.is_(True))
         )
         lead_role = lead_result.scalar_one_or_none()
 

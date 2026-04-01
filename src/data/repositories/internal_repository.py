@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from typing import Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.data.models.postgres.models import (
@@ -30,18 +29,18 @@ class InternalRepository:
 
     # ── User (internal-specific operations) ───────────────────────────────────
 
-    async def get_user_by_id(self, user_id: uuid.UUID) -> Optional[User]:
+    async def get_user_by_id(self, user_id: uuid.UUID) -> User | None:
         """Bare fetch by PK — used by GET /internal/users/{id}."""
         return await self._session.get(User, user_id)
 
-    async def get_active_user_by_id(self, user_id: uuid.UUID) -> Optional[User]:
+    async def get_active_user_by_id(self, user_id: uuid.UUID) -> User | None:
         """Fetch a non-deleted, active user — used by customer-tier lookup."""
         result = await self._session.execute(
             select(User).where(User.id == user_id, User.is_active.is_(True))
         )
         return result.scalar_one_or_none()
 
-    async def get_user_by_email(self, email: str) -> Optional[User]:
+    async def get_user_by_email(self, email: str) -> User | None:
         """Used by create-or-get customer to detect duplicates."""
         result = await self._session.execute(
             select(User).where(
@@ -51,7 +50,7 @@ class InternalRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_active_user_by_email(self, email: str) -> Optional[User]:
+    async def get_active_user_by_email(self, email: str) -> User | None:
         result = await self._session.execute(
             select(User).where(
                 func.lower(User.email) == email.lower().strip(),
@@ -71,7 +70,7 @@ class InternalRepository:
 
     async def update_user_preferred_contact(
         self, user_id: uuid.UUID, preferred_contact: str
-    ) -> Optional[User]:
+    ) -> User | None:
         """Patch preferred_contact in-place; returns None when user not found."""
         result = await self._session.execute(
             select(User).where(User.id == user_id, User.deleted_at.is_(None))
@@ -85,11 +84,11 @@ class InternalRepository:
 
     # ── Role ──────────────────────────────────────────────────────────────────
 
-    async def get_role_by_id(self, role_id: uuid.UUID) -> Optional[Role]:
+    async def get_role_by_id(self, role_id: uuid.UUID) -> Role | None:
         """Used by GET /internal/users/{id} to resolve role name."""
         return await self._session.get(Role, role_id)
 
-    async def get_role_by_name(self, name: str) -> Optional[Role]:
+    async def get_role_by_name(self, name: str) -> Role | None:
         """Used by create-or-get customer to assign the 'customer' role."""
         result = await self._session.execute(
             select(Role).where(
@@ -101,7 +100,7 @@ class InternalRepository:
 
     # ── Tier ──────────────────────────────────────────────────────────────────
 
-    async def get_tier_by_name(self, tier_name: str) -> Optional[Tier]:
+    async def get_tier_by_name(self, tier_name: str) -> Tier | None:
         """Used by GET /internal/tiers/by-name/{tier_name}."""
         result = await self._session.execute(
             select(Tier).where(
@@ -112,10 +111,10 @@ class InternalRepository:
         return result.scalar_one_or_none()
 
     async def get_customer_tier(
-        self,
-        company_id: uuid.UUID,
-        product_id: Optional[uuid.UUID] = None,
-    ) -> Optional[tuple[CompanyProductSubscription, Tier]]:
+    self,
+    company_id: uuid.UUID,
+    product_id: uuid.UUID | None = None,
+) -> tuple[CompanyProductSubscription, Tier] | None:
         """
         Returns the active (subscription, tier) pair for a company.
         Optionally filtered to a specific product.
@@ -133,11 +132,14 @@ class InternalRepository:
             stmt = stmt.where(CompanyProductSubscription.product_id == product_id)
 
         row = (await self._session.execute(stmt)).first()
-        return row  # (CompanyProductSubscription, Tier) | None
+        if row is None:
+            return None
+        sub, tier = row
+        return sub, tier
 
     # ── Company ───────────────────────────────────────────────────────────────
 
-    async def get_company_by_domain(self, domain: str) -> Optional[Company]:
+    async def get_company_by_domain(self, domain: str) -> Company | None:
         """Used by GET /internal/companies/by-domain/{domain}."""
         result = await self._session.execute(
             select(Company).where(
